@@ -55,6 +55,21 @@ struct phonemizer_model
 void load_model(const std::string &fname, phonemizer_model &model);
 
 /**
+ * @brief Performs the forward pass of a phonemizer_model.
+ *
+ * This function performs the forward pass of a phonemizer_model by processing the input tensor
+ * through the embedding, positional encoding, transformer encoder, and fully connected layers.
+ * It creates a new graph, adds the operations to the graph, computes the result,
+ * and returns it.
+ *
+ * @param input_tensor The input tensor.
+ * @param ctx The ggml_context.
+ * @param model The phonemizer_model.
+ * @return The result tensor.
+ */
+struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx, const phonemizer_model &model);
+
+/**
  * Computes the result of a given model on the input data.
  *
  * @param model The phonemizer_model representing the model.

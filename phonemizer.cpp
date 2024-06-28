@@ -141,9 +141,9 @@ struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx,
  */
 struct ggml_tensor *compute(const phonemizer_model &model, const std::vector<float> &input)
 {
-    int32_t shape = model.hparams.encoder_vocab_size; // Adjust shape based on input data
+    int32_t vocab_size = model.hparams.encoder_vocab_size; // Adjust shape based on input data
 
-    static size_t buf_size = shape * sizeof(float) * 1024 * 1024;
+    static size_t buf_size = vocab_size * sizeof(float) * 1024 * 1024;
     static void *buf = malloc(buf_size);
     struct ggml_init_params params = {
         /*.mem_size   =*/buf_size,
@@ -151,7 +151,9 @@ struct ggml_tensor *compute(const phonemizer_model &model, const std::vector<flo
         /*.no_alloc   =*/false,
     };
     struct ggml_context *ctx = ggml_init(params);
-    struct ggml_tensor *input_tensor = create_input_tensor(input, ctx, shape);
+    struct ggml_tensor *input_tensor = create_input_tensor(input, ctx, vocab_size);
+    memcpy(input_tensor->data, input.data(), ggml_nbytes(input_tensor));
+
     struct ggml_tensor *result = forward(input_tensor, ctx, model);
 
     // ggml_graph_print(gf);
@@ -182,7 +184,7 @@ void load_model(const std::string &fname, phonemizer_model &model)
     const int n_kv = gguf_get_n_kv(ctx);
     printf("%s: loaded meta data with %d key-value pairs and %d tensors from %s\n", __func__, n_kv, n_tensors, fname.c_str());
 
-    // Evaluate context size
+    // Calculate required memory size
     size_t model_size = 0;
 
     for (int i = 0; i < n_tensors; ++i)
@@ -198,6 +200,9 @@ void load_model(const std::string &fname, phonemizer_model &model)
                __func__, i, ggml_n_dims(cur), cur->name, tensor_size, offset, cur->ne[0], cur->ne[1], cur->ne[2], cur->ne[3], ggml_type_name(type));
     }
 
+    // Consider extra memory for operations and overhead
+    model_size += 10 * 1024 * 1024;  // Adding an extra 10 MB as a buffer
+
     // Init model backend - currently CPU only
     model.backend = ggml_backend_cpu_init();
     if (!model.backend)
@@ -205,11 +210,11 @@ void load_model(const std::string &fname, phonemizer_model &model)
         throw std::runtime_error(format("%s: ggml_backend_cpu_init() failed\n", __func__));
     }
 
-    // Init model context
+    // Init model context with increased memory size
     struct ggml_init_params ggml_params = {
-        /* .mem_size   = */ (n_tensors + 1) * ggml_tensor_overhead(),
+        /* .mem_size   = */ model_size,
         /* .mem_buffer = */ NULL,
-        /* .no_alloc   = */ true,
+        /* .no_alloc   = */ false,  // allow ggml to allocate memory
     };
 
     model.ctx = ggml_init(ggml_params);
@@ -220,11 +225,9 @@ void load_model(const std::string &fname, phonemizer_model &model)
     }
 
     // Add tensors to context
-    for (int i = 0; i < n_tensors; ++i)
-    {
+    for (int i = 0; i < n_tensors; ++i) {
         const char *name = gguf_get_tensor_name(ctx, i);
-        struct ggml_tensor *t = ggml_get_tensor(meta, name);
-        struct ggml_tensor *cur = ggml_dup_tensor(model.ctx, t);
+        struct ggml_tensor *cur = ggml_dup_tensor(model.ctx, ggml_get_tensor(meta, name));
         ggml_set_name(cur, name);
         model.tensors[name] = cur;
     }
@@ -266,4 +269,6 @@ void load_model(const std::string &fname, phonemizer_model &model)
     // Load hparams and weights into model params
     load_hparams(model, ctx);
     load_weights(model);
+
+    gguf_free(ctx);  // Ensure to free the gguf context
 }

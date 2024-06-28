@@ -1,18 +1,26 @@
 #include "phonemizer.h"
 #include <string.h>
+#include <vector>
+#include <random>
+#include <algorithm>
+#include <iostream>
 
 int main(void)
 {
     ggml_time_init();
 
-    // Create example tensor
-    std::vector<float> input = {1, 2, 3, 4, 5};
-
     // Load model and run forward
     phonemizer_model model;
     load_model("./model/deep_phonemizer.gguf", model);
-    printf("Model loaded\n");
-    struct ggml_tensor *result = compute(model, input);
+    
+    // Get the encoder vocabulary size from the model hyperparameters
+    int vocab_size = model.hparams.encoder_vocab_size;
+
+    // Create example tensor with valid indices
+    std::vector<float> input_data(vocab_size);
+    std::iota(input_data.begin(), input_data.end(), 0);
+
+    struct ggml_tensor *result = compute(model, input_data);
     printf("Forward computed\n");
 
     // Printing
