@@ -15,12 +15,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Packages from requirements.txt
-        run: pip install -r weights_export/requirements.txt
-
-      - name: Saving Model Weights
-        run: python weights_export/export_model_weights.py
-
       - name: Create Build Environment
         run: mkdir build
 
