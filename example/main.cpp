@@ -9,7 +9,7 @@ int main(void)
     std::vector<float> input = {1, 2, 3, 4, 5};
 
     // Load model and run forward
-    module model;
+    phonemizer_model model;
     load_model("../example.gguf", model);
     struct ggml_tensor *result = compute(model, input);
 
