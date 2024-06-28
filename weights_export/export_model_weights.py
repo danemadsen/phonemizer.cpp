@@ -3,8 +3,9 @@ import numpy as np
 from gguf import GGUFWriter
 from typing import Dict, Any
 from dp.model.model import load_checkpoint
+from dp.preprocessing.text import Preprocessor
 
-def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter):
+def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor: Preprocessor):
     # List of hyperparameters to add
     hyperparams = [
         ("encoder_vocab_size", int),
@@ -15,15 +16,22 @@ def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter):
         ("dropout", float),
         ("heads", int),
     ]
-    
+
     # Add each hyperparameter if it exists in the config
     for param, dtype in hyperparams:
         try:
-            value = config['model'][param]
+            if param == "encoder_vocab_size":
+                value = preprocessor.text_tokenizer.vocab_size
+            elif param == "decoder_vocab_size":
+                value = preprocessor.phoneme_tokenizer.vocab_size
+            else:
+                value = config['model'][param]
+
             if dtype == int:
                 gguf_writer.add_int32(param, value)
             elif dtype == float:
                 gguf_writer.add_float32(param, value)
+            print(f"Added hyperparameter {param} with value {value}")
         except KeyError:
             print(f"Warning: {param} not found in config")
 
@@ -42,10 +50,14 @@ if __name__ == "__main__":
     model, checkpoint = load_checkpoint(checkpoint_path, device)
     config = checkpoint['config']
 
+    print(f"Config: {config}")
+
+    preprocessor = Preprocessor.from_config(config)
+
     gguf_writer = GGUFWriter(output_gguf_path, "model_name")
 
     # Insert hyperparameters
-    parse_hparams(config, gguf_writer)
+    parse_hparams(config, gguf_writer, preprocessor)
 
     # Insert weights
     parse_model(model, gguf_writer)
