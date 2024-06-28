@@ -1,7 +1,7 @@
 #include "ggml.h"
 #include "phonemizer.h"
 #include "ggml-backend.h"
-#include "utils.cpp"
+#include "utils.h"
 
 #include <cassert>
 #include <cmath>
@@ -98,7 +98,7 @@ struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx,
     struct ggml_tensor *x = input_tensor;
 
     // Embedding
-    x = ggml_embedding(ctx, model.tensors.at("embedding.weight"), x);
+    x = get_embedding(ctx, model.tensors.at("embedding.weight"), x);
     
     // Positional Encoding
     x = ggml_positional_encoding(ctx, x, model.hparams.d_model, model.hparams.dropout);
@@ -129,7 +129,7 @@ struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx,
     }
 
     // Fully Connected Layer
-    x = ggml_linear(ctx, model.tensors.at("fc_out.weight"), model.tensors.at("fc_out.bias"), x);
+    x = get_linear(ctx, model.tensors.at("fc_out.weight"), model.tensors.at("fc_out.bias"), x);
 
     ggml_set_name(x, "result");
     ggml_build_forward_expand(gf, x);
