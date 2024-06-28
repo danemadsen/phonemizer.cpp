@@ -1,4 +1,4 @@
-#include "template.h"
+#include "phonemizer.h"
 #include <string.h>
 
 int main(void)
