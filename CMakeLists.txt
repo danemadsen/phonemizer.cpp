@@ -5,7 +5,7 @@ project(phonemizer.cpp)
 set(PHONEMIZER_LIB phonemizer)
 
 # Set the output directory for the compiled binaries
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 
 # Check for build type and set default to Release if not specified
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

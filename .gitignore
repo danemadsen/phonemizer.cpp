@@ -1,6 +1,6 @@
 build
+bin
 .vscode
 *.bin
 __pycache__
 *.DS_Store
-*.gguf

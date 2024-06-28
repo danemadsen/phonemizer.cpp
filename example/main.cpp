@@ -10,8 +10,10 @@ int main(void)
 
     // Load model and run forward
     phonemizer_model model;
-    load_model("./deep_phonemizer.gguf", model);
+    load_model("./model/deep_phonemizer.gguf", model);
+    printf("Model loaded\n");
     struct ggml_tensor *result = compute(model, input);
+    printf("Forward computed\n");
 
     // Printing
     std::vector<float> out_data(ggml_nelements(result));
