@@ -9,7 +9,7 @@
 
 static const size_t MB = 1024 * 1024;
 
-struct model_hparams
+struct phonemizer_model_hparams
 {
     int32_t encoder_vocab_size = 1;
     int32_t decoder_vocab_size = 1;
@@ -20,9 +20,9 @@ struct model_hparams
     int32_t heads = 1;
 };
 
-struct module
+struct phonemizer_model
 {
-    model_hparams hparams;
+    phonemizer_model_hparams hparams;
 
     ggml_backend_t backend = NULL;
     ggml_backend_buffer_t buffer_w;
@@ -52,13 +52,13 @@ struct module
  * @throws std::runtime_error if the model file fails to open, fails to allocate memory for the model,
  * or fails to seek for a tensor in the file.
  */
-void load_model(const std::string &fname, module &model);
+void load_model(const std::string &fname, phonemizer_model &model);
 
 /**
  * Computes the result of a given model on the input data.
  *
- * @param model The module representing the model.
+ * @param model The phonemizer_model representing the model.
  * @param input The input data as a vector of floats.
  * @return The computed result as a ggml_tensor pointer.
  */
-struct ggml_tensor *compute(const module &model, const std::vector<float> &input);
+struct ggml_tensor *compute(const phonemizer_model &model, const std::vector<float> &input);

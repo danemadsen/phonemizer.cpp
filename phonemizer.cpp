@@ -15,15 +15,15 @@
 #include <inttypes.h>
 
 /**
- * @brief Loads the weights of a module from the ggml_context.
+ * @brief Loads the weights of a phonemizer_model from the ggml_context.
  *
- * This function loads the weights of a module from the ggml_context by retrieving
+ * This function loads the weights of a phonemizer_model from the ggml_context by retrieving
  * the tensors with the specified names and assigning them to the corresponding
- * fields of the module.
+ * fields of the phonemizer_model.
  *
- * @param model The module to load the weights into.
+ * @param model The phonemizer_model to load the weights into.
  */
-void load_weights(module &model)
+void load_weights(phonemizer_model &model)
 {
     // Loading weights from the model context
     for (auto &entry : model.tensors)
@@ -34,16 +34,16 @@ void load_weights(module &model)
 }
 
 /**
- * @brief Loads the hyperparameters of a module from the gguf_context.
+ * @brief Loads the hyperparameters of a phonemizer_model from the gguf_context.
  *
- * This function loads the hyperparameters of a module from the gguf_context by
+ * This function loads the hyperparameters of a phonemizer_model from the gguf_context by
  * retrieving the values of the specified keys and assigning them to the corresponding
- * fields of the module's hparams struct.
+ * fields of the phonemizer_model's hparams struct.
  *
- * @param model The module to load the hyperparameters into.
+ * @param model The phonemizer_model to load the hyperparameters into.
  * @param ctx The gguf_context.
  */
-void load_hparams(module &model, gguf_context *ctx)
+void load_hparams(phonemizer_model &model, gguf_context *ctx)
 {
     auto &hparams = model.hparams;
     hparams.encoder_vocab_size = get_i32(ctx, "encoder_vocab_size");
@@ -79,19 +79,19 @@ struct ggml_tensor *create_input_tensor(const std::vector<float> &input, struct 
 }
 
 /**
- * @brief Performs the forward pass of a module.
+ * @brief Performs the forward pass of a phonemizer_model.
  *
- * This function performs the forward pass of a module by processing the input tensor
+ * This function performs the forward pass of a phonemizer_model by processing the input tensor
  * through the embedding, positional encoding, transformer encoder, and fully connected layers.
  * It creates a new graph, adds the operations to the graph, computes the result,
  * and returns it.
  *
  * @param input_tensor The input tensor.
  * @param ctx The ggml_context.
- * @param model The module.
+ * @param model The phonemizer_model.
  * @return The result tensor.
  */
-struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx, const module &model)
+struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx, const phonemizer_model &model)
 {
     struct ggml_cgraph *gf = ggml_new_graph(ctx);
 
@@ -135,11 +135,11 @@ struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx,
 /**
  * Computes the result of a given model on the input data.
  *
- * @param model The module representing the model.
+ * @param model The phonemizer_model representing the model.
  * @param input The input data as a vector of floats.
  * @return The computed result as a ggml_tensor pointer.
  */
-struct ggml_tensor *compute(const module &model, const std::vector<float> &input)
+struct ggml_tensor *compute(const phonemizer_model &model, const std::vector<float> &input)
 {
     int32_t shape = model.hparams.encoder_vocab_size; // Adjust shape based on input data
 
@@ -160,7 +160,7 @@ struct ggml_tensor *compute(const module &model, const std::vector<float> &input
     return result;
 }
 
-void load_model(const std::string &fname, module &model)
+void load_model(const std::string &fname, phonemizer_model &model)
 {
     fprintf(stderr, "%s: loading model from '%s'\n", __func__, fname.c_str());
 
