@@ -214,7 +214,7 @@ void load_model(const std::string &fname, phonemizer_model &model)
     struct ggml_init_params ggml_params = {
         /* .mem_size   = */ model_size,
         /* .mem_buffer = */ NULL,
-        /* .no_alloc   = */ false,  // allow ggml to allocate memory
+        /* .no_alloc   = */ true
     };
 
     model.ctx = ggml_init(ggml_params);
