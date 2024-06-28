@@ -10,6 +10,8 @@
 #include <vector>
 #include <limits.h>
 #include <inttypes.h>
+#include <cstdarg>
+#include <cmath>
 
 static std::string format(const char *fmt, ...)
 {
