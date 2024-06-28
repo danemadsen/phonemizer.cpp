@@ -4,7 +4,7 @@ set(TEMPLATE_LIB template)
 set(BINDINGS_LIB bindings)
 
 add_subdirectory(ggml)
-add_library(${TEMPLATE_LIB} STATIC template.cpp template.h)
+add_library(${TEMPLATE_LIB} STATIC phonemizer.cpp phonemizer.h utils.h)
 
 add_subdirectory(example)
 add_subdirectory(tests/pybind11)

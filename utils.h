@@ -101,10 +101,10 @@ static struct ggml_tensor *get_linear(struct ggml_context *ctx, struct ggml_tens
 }
 
 // Simplified Transformer Encoder Layer
-static struct ggml_tensor *ggml_transformer_encoder_layer(struct ggml_context *ctx, struct ggml_tensor *input, struct ggml_tensor *self_attn_q_weight, struct ggml_tensor *self_attn_k_weight, struct ggml_tensor *self_attn_v_weight, 
-                                                          struct ggml_tensor *self_attn_out_proj_weight, struct ggml_tensor *linear1_weight, struct ggml_tensor *linear1_bias, 
-                                                          struct ggml_tensor *linear2_weight, struct ggml_tensor *linear2_bias, struct ggml_tensor *norm1_weight, struct ggml_tensor *norm1_bias, 
-                                                          struct ggml_tensor *norm2_weight, struct ggml_tensor *norm2_bias, int n_head, int d_model, int d_fft, float dropout)
+static struct ggml_tensor *ggml_transformer_encoder_layer(struct ggml_context *ctx, struct ggml_tensor *input, struct ggml_tensor *self_attn_q_weight, struct ggml_tensor *self_attn_k_weight, 
+                                                          struct ggml_tensor *self_attn_v_weight, struct ggml_tensor *self_attn_out_proj_weight, struct ggml_tensor *linear1_weight, 
+                                                          struct ggml_tensor *linear1_bias, struct ggml_tensor *linear2_weight, struct ggml_tensor *linear2_bias, 
+                                                          int d_model)
 {
     // Implement a simplified transformer encoder layer here.
     // This function should apply the attention mechanism and the feed-forward network with normalization.
@@ -120,7 +120,7 @@ static struct ggml_tensor *ggml_transformer_encoder_layer(struct ggml_context *c
     // Apply the output projection weight
     attention_output = ggml_mul_mat(ctx, attention_output, self_attn_out_proj_weight);
     
-    // Apply the first layer normalization
+    // Apply normalization to the attention output
     struct ggml_tensor *norm1_output = ggml_norm(ctx, attention_output, 1e-5);
     
     // Feed-forward network
@@ -131,9 +131,8 @@ static struct ggml_tensor *ggml_transformer_encoder_layer(struct ggml_context *c
     struct ggml_tensor *feed_forward_output = ggml_mul_mat(ctx, feed_forward_intermediate, linear2_weight);
     feed_forward_output = ggml_add_inplace(ctx, feed_forward_output, linear2_bias);
     
-    // Apply the second layer normalization
+    // Apply normalization to the feed-forward output
     struct ggml_tensor *output = ggml_norm(ctx, feed_forward_output, 1e-5);
     
     return output;
 }
-

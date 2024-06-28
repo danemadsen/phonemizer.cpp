@@ -118,14 +118,8 @@ struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx,
             model.tensors.at(layer_prefix + ".linear1.bias"),
             model.tensors.at(layer_prefix + ".linear2.weight"),
             model.tensors.at(layer_prefix + ".linear2.bias"),
-            model.tensors.at(layer_prefix + ".norm1.weight"),
-            model.tensors.at(layer_prefix + ".norm1.bias"),
-            model.tensors.at(layer_prefix + ".norm2.weight"),
-            model.tensors.at(layer_prefix + ".norm2.bias"),
-            model.hparams.heads,
-            model.hparams.d_model,
-            model.hparams.d_fft,
-            model.hparams.dropout);
+            model.hparams.d_model
+        );
     }
 
     // Fully Connected Layer
