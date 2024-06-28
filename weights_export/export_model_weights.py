@@ -5,13 +5,27 @@ from typing import Dict, Any
 from dp.model.model import load_checkpoint
 
 def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter):
-    gguf_writer.add_int32("encoder_vocab_size", config['model']['encoder_vocab_size'])
-    gguf_writer.add_int32("decoder_vocab_size", config['model']['decoder_vocab_size'])
-    gguf_writer.add_int32("d_model", config['model']['d_model'])
-    gguf_writer.add_int32("d_fft", config['model']['d_fft'])
-    gguf_writer.add_int32("layers", config['model']['layers'])
-    gguf_writer.add_float("dropout", config['model']['dropout'])
-    gguf_writer.add_int32("heads", config['model']['heads'])
+    # List of hyperparameters to add
+    hyperparams = [
+        ("encoder_vocab_size", int),
+        ("decoder_vocab_size", int),
+        ("d_model", int),
+        ("d_fft", int),
+        ("layers", int),
+        ("dropout", float),
+        ("heads", int),
+    ]
+    
+    # Add each hyperparameter if it exists in the config
+    for param, dtype in hyperparams:
+        try:
+            value = config['model'][param]
+            if dtype == int:
+                gguf_writer.add_int32(param, value)
+            elif dtype == float:
+                gguf_writer.add_float32(param, value)
+        except KeyError:
+            print(f"Warning: {param} not found in config")
 
 def parse_model(model: torch.nn.Module, gguf_writer: GGUFWriter):
     checkpoint = model.state_dict()
