@@ -8,12 +8,12 @@ set(PHONEMIZER_LIB phonemizer)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Check for build type and set default to Release if not specified
-if(NOT CMAKE_BUILD_TYPE)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "Building in Debug mode")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
+else()
     set(CMAKE_BUILD_TYPE Release)
 endif()
-
-# Add debugging symbols and set appropriate flags for a debug build
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 
 # Add subdirectories for dependencies and examples
 add_subdirectory(ggml)
