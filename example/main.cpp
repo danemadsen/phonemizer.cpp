@@ -10,7 +10,7 @@ int main(void)
 
     // Load model and run forward
     phonemizer_model model;
-    load_model("../example.gguf", model);
+    load_model("./deep_phonemizer.gguf", model);
     struct ggml_tensor *result = compute(model, input);
 
     // Printing
