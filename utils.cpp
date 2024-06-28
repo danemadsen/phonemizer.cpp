@@ -45,6 +45,13 @@ static int32_t get_i32(const gguf_context *ctx, const std::string &key)
     return gguf_get_val_i32(ctx, i);
 }
 
+static float get_float(const gguf_context *ctx, const std::string &key)
+{
+    const int i = get_key_idx(ctx, key.c_str());
+
+    return gguf_get_val_f32(ctx, i);
+}
+
 static struct ggml_tensor *get_tensor(struct ggml_context *ctx, const std::string &name)
 {
     struct ggml_tensor *cur = ggml_get_tensor(ctx, name.c_str());

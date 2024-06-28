@@ -25,8 +25,12 @@
  */
 void load_weights(module &model)
 {
-    model.fc_w = get_tensor(model.ctx, "fc.weight");
-    model.bias = get_tensor(model.ctx, "bias");
+    // Loading weights from the model context
+    for (auto &entry : model.tensors)
+    {
+        const std::string &name = entry.first;
+        entry.second = get_tensor(model.ctx, name.c_str());
+    }
 }
 
 /**
@@ -42,9 +46,15 @@ void load_weights(module &model)
 void load_hparams(module &model, gguf_context *ctx)
 {
     auto &hparams = model.hparams;
-    hparams.in_channels = get_i32(ctx, "in_channels");
-    hparams.bias_size = get_i32(ctx, "bias_size");
-    printf("%s: in_channels = %d\n", __func__, hparams.in_channels);
+    hparams.encoder_vocab_size = get_i32(ctx, "encoder_vocab_size");
+    hparams.decoder_vocab_size = get_i32(ctx, "decoder_vocab_size");
+    hparams.d_model = get_i32(ctx, "d_model");
+    hparams.d_fft = get_i32(ctx, "d_fft");
+    hparams.layers = get_i32(ctx, "layers");
+    hparams.dropout = get_float(ctx, "dropout");
+    hparams.heads = get_i32(ctx, "heads");
+    printf("%s: encoder_vocab_size = %d, decoder_vocab_size = %d, d_model = %d, d_fft = %d, layers = %d, dropout = %f, heads = %d\n",
+           __func__, hparams.encoder_vocab_size, hparams.decoder_vocab_size, hparams.d_model, hparams.d_fft, hparams.layers, hparams.dropout, hparams.heads);
 }
 
 /**
@@ -71,9 +81,9 @@ struct ggml_tensor *create_input_tensor(const std::vector<float> &input, struct 
 /**
  * @brief Performs the forward pass of a module.
  *
- * This function performs the forward pass of a module by multiplying the input tensor
- * with the module's weight tensor and adding the bias tensor. It creates a new graph,
- * adds the multiplication and addition operations to the graph, computes the result,
+ * This function performs the forward pass of a module by processing the input tensor
+ * through the embedding, positional encoding, transformer encoder, and fully connected layers.
+ * It creates a new graph, adds the operations to the graph, computes the result,
  * and returns it.
  *
  * @param input_tensor The input tensor.
@@ -84,16 +94,48 @@ struct ggml_tensor *create_input_tensor(const std::vector<float> &input, struct 
 struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx, const module &model)
 {
     struct ggml_cgraph *gf = ggml_new_graph(ctx);
-    struct ggml_tensor *result = ggml_add(
-        ctx,
-        ggml_mul_mat(ctx, model.fc_w, input_tensor),
-        model.bias);
 
-    ggml_set_name(result, "result");
-    ggml_build_forward_expand(gf, result);
+    struct ggml_tensor *x = input_tensor;
+
+    // Embedding
+    x = ggml_embedding(ctx, model.tensors.at("embedding.weight"), x);
+    
+    // Positional Encoding
+    x = ggml_positional_encoding(ctx, x, model.hparams.d_model, model.hparams.dropout);
+
+    // Transformer Encoder
+    for (int i = 0; i < model.hparams.layers; ++i)
+    {
+        std::string layer_prefix = "encoder.layers." + std::to_string(i);
+        x = ggml_transformer_encoder_layer(
+            ctx,
+            x,
+            model.tensors.at(layer_prefix + ".self_attn.in_proj_weight"),
+            model.tensors.at(layer_prefix + ".self_attn.in_proj_bias"),
+            model.tensors.at(layer_prefix + ".self_attn.out_proj.weight"),
+            model.tensors.at(layer_prefix + ".self_attn.out_proj.bias"),
+            model.tensors.at(layer_prefix + ".linear1.weight"),
+            model.tensors.at(layer_prefix + ".linear1.bias"),
+            model.tensors.at(layer_prefix + ".linear2.weight"),
+            model.tensors.at(layer_prefix + ".linear2.bias"),
+            model.tensors.at(layer_prefix + ".norm1.weight"),
+            model.tensors.at(layer_prefix + ".norm1.bias"),
+            model.tensors.at(layer_prefix + ".norm2.weight"),
+            model.tensors.at(layer_prefix + ".norm2.bias"),
+            model.hparams.heads,
+            model.hparams.d_model,
+            model.hparams.d_fft,
+            model.hparams.dropout);
+    }
+
+    // Fully Connected Layer
+    x = ggml_linear(ctx, model.tensors.at("fc_out.weight"), model.tensors.at("fc_out.bias"), x);
+
+    ggml_set_name(x, "result");
+    ggml_build_forward_expand(gf, x);
     ggml_graph_compute_with_ctx(ctx, gf, 1);
 
-    return result;
+    return x;
 }
 
 /**
@@ -105,7 +147,7 @@ struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx,
  */
 struct ggml_tensor *compute(const module &model, const std::vector<float> &input)
 {
-    int32_t shape = model.hparams.in_channels;
+    int32_t shape = model.hparams.encoder_vocab_size; // Adjust shape based on input data
 
     static size_t buf_size = shape * sizeof(float) * 1024 * 1024;
     static void *buf = malloc(buf_size);
@@ -190,6 +232,7 @@ void load_model(const std::string &fname, module &model)
         struct ggml_tensor *t = ggml_get_tensor(meta, name);
         struct ggml_tensor *cur = ggml_dup_tensor(model.ctx, t);
         ggml_set_name(cur, name);
+        model.tensors[name] = cur;
     }
 
     // Allocate model buffer

@@ -11,8 +11,13 @@ static const size_t MB = 1024 * 1024;
 
 struct model_hparams
 {
-    int32_t in_channels = 1;
-    int32_t bias_size = 1;
+    int32_t encoder_vocab_size = 1;
+    int32_t decoder_vocab_size = 1;
+    int32_t d_model = 512;
+    int32_t d_fft = 1024;
+    int32_t layers = 4;
+    float dropout = 0.1;
+    int32_t heads = 1;
 };
 
 struct module
