@@ -101,16 +101,39 @@ static struct ggml_tensor *get_linear(struct ggml_context *ctx, struct ggml_tens
 }
 
 // Simplified Transformer Encoder Layer
-static struct ggml_tensor *ggml_transformer_encoder_layer(struct ggml_context *ctx, struct ggml_tensor *input, struct ggml_tensor *self_attn_in_proj_weight, struct ggml_tensor *self_attn_in_proj_bias,
-                                                          struct ggml_tensor *self_attn_out_proj_weight, struct ggml_tensor *self_attn_out_proj_bias, struct ggml_tensor *linear1_weight,
-                                                          struct ggml_tensor *linear1_bias, struct ggml_tensor *linear2_weight, struct ggml_tensor *linear2_bias, struct ggml_tensor *norm1_weight,
-                                                          struct ggml_tensor *norm1_bias, struct ggml_tensor *norm2_weight, struct ggml_tensor *norm2_bias, int n_head, int d_model, int d_fft, float dropout)
+static struct ggml_tensor *ggml_transformer_encoder_layer(struct ggml_context *ctx, struct ggml_tensor *input, struct ggml_tensor *self_attn_q_weight, struct ggml_tensor *self_attn_k_weight, struct ggml_tensor *self_attn_v_weight, 
+                                                          struct ggml_tensor *self_attn_out_proj_weight, struct ggml_tensor *linear1_weight, struct ggml_tensor *linear1_bias, 
+                                                          struct ggml_tensor *linear2_weight, struct ggml_tensor *linear2_bias, struct ggml_tensor *norm1_weight, struct ggml_tensor *norm1_bias, 
+                                                          struct ggml_tensor *norm2_weight, struct ggml_tensor *norm2_bias, int n_head, int d_model, int d_fft, float dropout)
 {
     // Implement a simplified transformer encoder layer here.
     // This function should apply the attention mechanism and the feed-forward network with normalization.
-    struct ggml_tensor *attention_output = ggml_attention(ctx, input, self_attn_in_proj_weight, self_attn_in_proj_bias, self_attn_out_proj_weight, self_attn_out_proj_bias, n_head, d_model, dropout);
-    struct ggml_tensor *norm1_output = ggml_norm(ctx, attention_output, 1e-5);  // Using ggml_norm with epsilon
-    struct ggml_tensor *feed_forward_output = ggml_feed_forward(ctx, norm1_output, linear1_weight, linear1_bias, linear2_weight, linear2_bias, d_fft, dropout);
-    struct ggml_tensor *output = ggml_norm(ctx, feed_forward_output, 1e-5);  // Using ggml_norm with epsilon
+    
+    // Prepare the query, key, value tensors
+    struct ggml_tensor *q = ggml_mul_mat(ctx, input, self_attn_q_weight);
+    struct ggml_tensor *k = ggml_mul_mat(ctx, input, self_attn_k_weight);
+    struct ggml_tensor *v = ggml_mul_mat(ctx, input, self_attn_v_weight);
+    
+    // Apply the attention mechanism
+    struct ggml_tensor *attention_output = ggml_flash_attn_ext(ctx, q, k, v, NULL, 1.0f / sqrt(d_model), 0.0f);
+    
+    // Apply the output projection weight
+    attention_output = ggml_mul_mat(ctx, attention_output, self_attn_out_proj_weight);
+    
+    // Apply the first layer normalization
+    struct ggml_tensor *norm1_output = ggml_norm(ctx, attention_output, 1e-5);
+    
+    // Feed-forward network
+    struct ggml_tensor *feed_forward_intermediate = ggml_mul_mat(ctx, norm1_output, linear1_weight);
+    feed_forward_intermediate = ggml_add_inplace(ctx, feed_forward_intermediate, linear1_bias);
+    feed_forward_intermediate = ggml_relu_inplace(ctx, feed_forward_intermediate);
+    
+    struct ggml_tensor *feed_forward_output = ggml_mul_mat(ctx, feed_forward_intermediate, linear2_weight);
+    feed_forward_output = ggml_add_inplace(ctx, feed_forward_output, linear2_bias);
+    
+    // Apply the second layer normalization
+    struct ggml_tensor *output = ggml_norm(ctx, feed_forward_output, 1e-5);
+    
     return output;
 }
+
