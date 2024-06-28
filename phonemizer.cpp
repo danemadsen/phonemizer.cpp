@@ -29,7 +29,7 @@ void load_weights(module &model)
     for (auto &entry : model.tensors)
     {
         const std::string &name = entry.first;
-        entry.second = get_tensor(model.ctx, name.c_str());
+        entry.second = ggml_get_tensor(model.ctx, name.c_str());
     }
 }
 
@@ -51,7 +51,7 @@ void load_hparams(module &model, gguf_context *ctx)
     hparams.d_model = get_i32(ctx, "d_model");
     hparams.d_fft = get_i32(ctx, "d_fft");
     hparams.layers = get_i32(ctx, "layers");
-    hparams.dropout = get_float(ctx, "dropout");
+    hparams.dropout = get_f32(ctx, "dropout");
     hparams.heads = get_i32(ctx, "heads");
     printf("%s: encoder_vocab_size = %d, decoder_vocab_size = %d, d_model = %d, d_fft = %d, layers = %d, dropout = %f, heads = %d\n",
            __func__, hparams.encoder_vocab_size, hparams.decoder_vocab_size, hparams.d_model, hparams.d_fft, hparams.layers, hparams.dropout, hparams.heads);
@@ -101,7 +101,7 @@ struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx,
     x = get_embedding(ctx, model.tensors.at("embedding.weight"), x);
     
     // Positional Encoding
-    x = ggml_positional_encoding(ctx, x, model.hparams.d_model, model.hparams.dropout);
+    x = get_positional_encoding(ctx, x, model.hparams.d_model, model.hparams.dropout);
 
     // Transformer Encoder
     for (int i = 0; i < model.hparams.layers; ++i)

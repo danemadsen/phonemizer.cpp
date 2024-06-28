@@ -45,22 +45,11 @@ static int32_t get_i32(const gguf_context *ctx, const std::string &key)
     return gguf_get_val_i32(ctx, i);
 }
 
-static float get_float(const gguf_context *ctx, const std::string &key)
+static float get_f32(const gguf_context *ctx, const std::string &key)
 {
     const int i = get_key_idx(ctx, key.c_str());
 
     return gguf_get_val_f32(ctx, i);
-}
-
-static struct ggml_tensor *get_tensor(struct ggml_context *ctx, const std::string &name)
-{
-    struct ggml_tensor *cur = ggml_get_tensor(ctx, name.c_str());
-    if (!cur)
-    {
-        throw std::runtime_error(format("%s: unable to find tensor %s\n", __func__, name.c_str()));
-    }
-
-    return cur;
 }
 
 static struct ggml_tensor *get_embedding(struct ggml_context *ctx, struct ggml_tensor *weight, struct ggml_tensor *input)
@@ -76,7 +65,7 @@ static struct ggml_tensor *get_embedding(struct ggml_context *ctx, struct ggml_t
     return output;
 }
 
-static struct ggml_tensor *ggml_positional_encoding(struct ggml_context *ctx, struct ggml_tensor *input, int d_model, float dropout)
+static struct ggml_tensor *get_positional_encoding(struct ggml_context *ctx, struct ggml_tensor *input, int d_model, float dropout)
 {
     // Assume max length is the input length
     int n_tokens = input->ne[1];
@@ -120,8 +109,8 @@ static struct ggml_tensor *ggml_transformer_encoder_layer(struct ggml_context *c
     // Implement a simplified transformer encoder layer here.
     // This function should apply the attention mechanism and the feed-forward network with normalization.
     struct ggml_tensor *attention_output = ggml_attention(ctx, input, self_attn_in_proj_weight, self_attn_in_proj_bias, self_attn_out_proj_weight, self_attn_out_proj_bias, n_head, d_model, dropout);
-    struct ggml_tensor *norm1_output = ggml_layer_norm(ctx, attention_output, norm1_weight, norm1_bias);
+    struct ggml_tensor *norm1_output = ggml_norm(ctx, attention_output, 1e-5);  // Using ggml_norm with epsilon
     struct ggml_tensor *feed_forward_output = ggml_feed_forward(ctx, norm1_output, linear1_weight, linear1_bias, linear2_weight, linear2_bias, d_fft, dropout);
-    struct ggml_tensor *output = ggml_layer_norm(ctx, feed_forward_output, norm2_weight, norm2_bias);
+    struct ggml_tensor *output = ggml_norm(ctx, feed_forward_output, 1e-5);  // Using ggml_norm with epsilon
     return output;
 }
