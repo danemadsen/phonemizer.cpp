@@ -28,7 +28,7 @@ struct phonemizer_model
     ggml_backend_buffer_t buffer_w;
 
     // weights
-    struct ggml_tensor *fc_w;
+    struct ggml_tensor *weights;
     struct ggml_tensor *bias;
 
     // the context to define the tensor information (dimensions, size, memory data)

@@ -43,7 +43,7 @@ struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx,
     for (int i = 0; i < model.hparams.layers; ++i)
     {
         std::string layer_prefix = "encoder.layers." + std::to_string(i);
-        x = ggml_transformer_encoder_layer(
+        x = get_transformer_encoder_layer(
             ctx,
             x,
             model.tensors.at(layer_prefix + ".self_attn.in_proj_weight"),

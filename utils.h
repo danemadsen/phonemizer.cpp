@@ -103,7 +103,7 @@ static struct ggml_tensor *get_linear(struct ggml_context *ctx, struct ggml_tens
 }
 
 // Simplified Transformer Encoder Layer
-static struct ggml_tensor *ggml_transformer_encoder_layer(struct ggml_context *ctx, struct ggml_tensor *input, struct ggml_tensor *self_attn_q_weight, struct ggml_tensor *self_attn_k_weight, 
+static struct ggml_tensor *get_transformer_encoder_layer(struct ggml_context *ctx, struct ggml_tensor *input, struct ggml_tensor *self_attn_q_weight, struct ggml_tensor *self_attn_k_weight, 
                                                           struct ggml_tensor *self_attn_v_weight, struct ggml_tensor *self_attn_out_proj_weight, struct ggml_tensor *linear1_weight, 
                                                           struct ggml_tensor *linear1_bias, struct ggml_tensor *linear2_weight, struct ggml_tensor *linear2_bias, 
                                                           int d_model)
