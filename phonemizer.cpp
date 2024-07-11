@@ -57,11 +57,17 @@ static struct ggml_tensor *get_embedding(struct ggml_context *ctx, struct ggml_t
     int n_embed = weight->ne[1];
     int n_tokens = input->ne[0];
     struct ggml_tensor *output = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embed, n_tokens);
-    printf("Embedding: n_embed=%d, n_tokens=%d\n", n_embed, n_tokens); // Debug
+    printf("Embedding: n_embed=%d, n_tokens=%d\n", n_embed, n_tokens);
+
     for (int i = 0; i < n_tokens; ++i)
     {
         int idx = ((int32_t *)input->data)[i];
-        printf("Embedding: idx=%d\n", idx); // Debug
+        printf("Embedding: idx=%d\n", idx);
+        if (idx < 0 || idx >= weight->ne[0])
+        {
+            printf("Error: idx=%d out of bounds\n", idx);
+            return nullptr;
+        }
         memcpy((float *)output->data + i * n_embed, (float *)weight->data + idx * n_embed, n_embed * sizeof(float));
     }
     return output;
@@ -133,6 +139,7 @@ struct ggml_tensor *forward(struct ggml_tensor *input_tensor, struct ggml_contex
     struct ggml_tensor *x = input_tensor;
 
     x = get_embedding(ctx, model.tensors.at("embedding.weight"), x);
+    if (!x) return nullptr; // Check for null
     printf("EMBEDDING DONE\n");
     
     x = get_positional_encoding(ctx, x, model.hparams.d_model, model.hparams.dropout);
@@ -314,3 +321,4 @@ void load_model(const std::string &fname, phonemizer_model &model)
 
     gguf_free(ctx);
 }
+

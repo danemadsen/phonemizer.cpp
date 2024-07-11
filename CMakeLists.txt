@@ -20,7 +20,7 @@ add_subdirectory(ggml)
 add_subdirectory(example)
 
 # Create the static library
-add_library(${PHONEMIZER_LIB} STATIC phonemizer.cpp phonemizer.h utils.h)
+add_library(${PHONEMIZER_LIB} STATIC phonemizer.cpp phonemizer.h)
 
 # Link the ggml library
 target_link_libraries(${PHONEMIZER_LIB} PUBLIC ggml)
