@@ -13,6 +13,7 @@ struct phonemizer_model_hparams
 {
     int32_t encoder_vocab_size = 1;
     int32_t decoder_vocab_size = 1;
+    int32_t d_model = 512;
     int32_t d_fft = 1024;
     int32_t layers = 4;
     float dropout = 0.1;

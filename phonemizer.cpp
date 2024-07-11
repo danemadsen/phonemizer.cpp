@@ -48,8 +48,8 @@ static float get_f32(const gguf_context *ctx, const std::string &key) {
 }
 
 static struct ggml_tensor *get_embedding(struct ggml_context *ctx, struct ggml_tensor *weight, struct ggml_tensor *input) {
-    int n_embed = weight->ne[1];
-    int n_tokens = input->ne[0];
+    int n_embed = weight->ne[0];
+    int n_tokens = input->ne[1];
     struct ggml_tensor *output = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embed, n_tokens);
     printf("Embedding: n_embed=%d, n_tokens=%d\n", n_embed, n_tokens);
 
@@ -133,9 +133,7 @@ struct ggml_cgraph *create_graph(struct ggml_context *ctx, const phonemizer_mode
     if (!x) return nullptr; // Check for null
     printf("Embedding done\n");
 
-    int d_model = model.tensors.at("embedding.weight")->ne[1]; // Ensure d_model matches n_embed
-
-    x = get_positional_encoding(ctx, x, d_model, model.hparams.dropout);
+    x = get_positional_encoding(ctx, x, model.hparams.d_model, model.hparams.dropout);
     printf("Positional encoding done\n");
 
     for (int i = 0; i < model.hparams.layers; ++i) {
@@ -152,7 +150,7 @@ struct ggml_cgraph *create_graph(struct ggml_context *ctx, const phonemizer_mode
             model.tensors.at(layer_prefix + ".linear1.bias"),
             model.tensors.at(layer_prefix + ".linear2.weight"),
             model.tensors.at(layer_prefix + ".linear2.bias"),
-            d_model
+            model.hparams.d_model
         );
     }
     printf("Transformer encoder done\n");
@@ -295,6 +293,7 @@ void load_model(const std::string &fname, phonemizer_model &model) {
 
     model.hparams.encoder_vocab_size = get_i32(ctx, "encoder_vocab_size");
     model.hparams.decoder_vocab_size = get_i32(ctx, "decoder_vocab_size");
+    model.hparams.d_model = get_i32(ctx, "d_model");
     model.hparams.d_fft = get_i32(ctx, "d_fft");
     model.hparams.layers = get_i32(ctx, "layers");
     model.hparams.dropout = get_f32(ctx, "dropout");
