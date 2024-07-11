@@ -59,9 +59,11 @@ static struct ggml_tensor *get_embedding(struct ggml_context *ctx, struct ggml_t
     struct ggml_tensor *output = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embed, n_tokens);
     printf("Embedding: n_embed=%d, n_tokens=%d\n", n_embed, n_tokens);
 
+    int32_t *input_data = (int32_t *)input->data;
+
     for (int i = 0; i < n_tokens; ++i)
     {
-        int idx = ((int32_t *)input->data)[i];
+        int idx = input_data[i];
         printf("Embedding: idx=%d\n", idx);
         if (idx < 0 || idx >= weight->ne[0])
         {
@@ -138,6 +140,13 @@ struct ggml_tensor *forward(struct ggml_tensor *input_tensor, struct ggml_contex
 
     struct ggml_tensor *x = input_tensor;
 
+    // Ensure embedding.weight tensor exists
+    if (model.tensors.find("embedding.weight") == model.tensors.end())
+    {
+        printf("Error: embedding.weight tensor not found\n");
+        return nullptr;
+    }
+
     x = get_embedding(ctx, model.tensors.at("embedding.weight"), x);
     if (!x) return nullptr; // Check for null
     printf("EMBEDDING DONE\n");
@@ -193,15 +202,20 @@ struct ggml_tensor *compute(const phonemizer_model &model, const std::vector<flo
     };
     struct ggml_context *ctx = ggml_init(params);
     
-    struct ggml_tensor *input_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, vocab_size);
-    memcpy(input_tensor->data, input.data(), ggml_nbytes(input_tensor));
+    struct ggml_tensor *input_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, input.size());
+    for (size_t i = 0; i < input.size(); ++i) {
+        ((int32_t *)input_tensor->data)[i] = static_cast<int32_t>(input[i]);
+    }
     ggml_set_name(input_tensor, "input_tensor");
-
-    memcpy(input_tensor->data, input.data(), ggml_nbytes(input_tensor));
 
     printf("MEMCPY DONE\n");
 
     struct ggml_tensor *result = forward(input_tensor, ctx, model);
+    if (!result) {
+        printf("Error during forward pass\n");
+        ggml_free(ctx);
+        return nullptr;
+    }
     printf("FORWARD DONE\n");
 
     ggml_free(ctx);
