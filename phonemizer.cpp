@@ -15,70 +15,6 @@
 #include <inttypes.h>
 
 /**
- * @brief Loads the weights of a phonemizer_model from the ggml_context.
- *
- * This function loads the weights of a phonemizer_model from the ggml_context by retrieving
- * the tensors with the specified names and assigning them to the corresponding
- * fields of the phonemizer_model.
- *
- * @param model The phonemizer_model to load the weights into.
- */
-void load_weights(phonemizer_model &model)
-{
-    // Loading weights from the model context
-    for (auto &entry : model.tensors)
-    {
-        const std::string &name = entry.first;
-        entry.second = ggml_get_tensor(model.ctx, name.c_str());
-    }
-}
-
-/**
- * @brief Loads the hyperparameters of a phonemizer_model from the gguf_context.
- *
- * This function loads the hyperparameters of a phonemizer_model from the gguf_context by
- * retrieving the values of the specified keys and assigning them to the corresponding
- * fields of the phonemizer_model's hparams struct.
- *
- * @param model The phonemizer_model to load the hyperparameters into.
- * @param ctx The gguf_context.
- */
-void load_hparams(phonemizer_model &model, gguf_context *ctx)
-{
-    auto &hparams = model.hparams;
-    hparams.encoder_vocab_size = get_i32(ctx, "encoder_vocab_size");
-    hparams.decoder_vocab_size = get_i32(ctx, "decoder_vocab_size");
-    hparams.d_model = get_i32(ctx, "d_model");
-    hparams.d_fft = get_i32(ctx, "d_fft");
-    hparams.layers = get_i32(ctx, "layers");
-    hparams.dropout = get_f32(ctx, "dropout");
-    hparams.heads = get_i32(ctx, "heads");
-    printf("%s: encoder_vocab_size = %d, decoder_vocab_size = %d, d_model = %d, d_fft = %d, layers = %d, dropout = %f, heads = %d\n",
-           __func__, hparams.encoder_vocab_size, hparams.decoder_vocab_size, hparams.d_model, hparams.d_fft, hparams.layers, hparams.dropout, hparams.heads);
-}
-
-/**
- * @brief Creates an input tensor from a vector of floats.
- *
- * This function creates a 1-dimensional input tensor from a vector of floats.
- * It allocates memory for the tensor, copies the input data into the tensor,
- * and sets the tensor's name.
- *
- * @param input The input data as a vector of floats.
- * @param ctx The ggml_context.
- * @param shape The shape of the tensor.
- * @return A pointer to the created input tensor.
- */
-struct ggml_tensor *create_input_tensor(const std::vector<float> &input, struct ggml_context *ctx, int32_t shape)
-{
-    struct ggml_tensor *input_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, shape);
-    memcpy(input_tensor->data, input.data(), ggml_nbytes(input_tensor));
-    ggml_set_name(input_tensor, "input_tensor");
-
-    return input_tensor;
-}
-
-/**
  * @brief Performs the forward pass of a phonemizer_model.
  *
  * This function performs the forward pass of a phonemizer_model by processing the input tensor
@@ -151,7 +87,12 @@ struct ggml_tensor *compute(const phonemizer_model &model, const std::vector<flo
         /*.no_alloc   =*/false,
     };
     struct ggml_context *ctx = ggml_init(params);
-    struct ggml_tensor *input_tensor = create_input_tensor(input, ctx, vocab_size);
+    
+    // Create input tensor
+    struct ggml_tensor *input_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, vocab_size);
+    memcpy(input_tensor->data, input.data(), ggml_nbytes(input_tensor));
+    ggml_set_name(input_tensor, "input_tensor");
+
     memcpy(input_tensor->data, input.data(), ggml_nbytes(input_tensor));
 
     struct ggml_tensor *result = forward(input_tensor, ctx, model);
@@ -267,8 +208,20 @@ void load_model(const std::string &fname, phonemizer_model &model)
     fin.close();
 
     // Load hparams and weights into model params
-    load_hparams(model, ctx);
-    load_weights(model);
+    model.hparams.encoder_vocab_size = get_i32(ctx, "encoder_vocab_size");
+    model.hparams.decoder_vocab_size = get_i32(ctx, "decoder_vocab_size");
+    model.hparams.d_model = get_i32(ctx, "d_model");
+    model.hparams.d_fft = get_i32(ctx, "d_fft");
+    model.hparams.layers = get_i32(ctx, "layers");
+    model.hparams.dropout = get_f32(ctx, "dropout");
+    model.hparams.heads = get_i32(ctx, "heads");
+    
+    // Loading weights from the model context
+    for (auto &entry : model.tensors)
+    {
+        const std::string &name = entry.first;
+        entry.second = ggml_get_tensor(model.ctx, name.c_str());
+    }
 
     gguf_free(ctx);  // Ensure to free the gguf context
 }
