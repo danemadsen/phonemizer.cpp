@@ -91,29 +91,53 @@ static struct ggml_tensor *get_linear(struct ggml_context *ctx, struct ggml_tens
     return output;
 }
 
-static struct ggml_tensor *get_transformer_encoder_layer(struct ggml_context *ctx, struct ggml_tensor *input, struct ggml_tensor *self_attn_q_weight, struct ggml_tensor *self_attn_k_weight, 
-                                                          struct ggml_tensor *self_attn_v_weight, struct ggml_tensor *self_attn_out_proj_weight, struct ggml_tensor *linear1_weight, 
-                                                          struct ggml_tensor *linear1_bias, struct ggml_tensor *linear2_weight, struct ggml_tensor *linear2_bias, 
-                                                          int d_model) {
-    struct ggml_tensor *q = ggml_mul_mat(ctx, input, self_attn_q_weight);
-    struct ggml_tensor *k = ggml_mul_mat(ctx, input, self_attn_k_weight);
-    struct ggml_tensor *v = ggml_mul_mat(ctx, input, self_attn_v_weight);
-    
-    struct ggml_tensor *attention_output = ggml_flash_attn_ext(ctx, q, k, v, NULL, 1.0f / sqrt(d_model), 0.0f);
-    attention_output = ggml_mul_mat(ctx, attention_output, self_attn_out_proj_weight);
-    
-    struct ggml_tensor *norm1_output = ggml_norm(ctx, attention_output, 1e-5);
-    
-    struct ggml_tensor *feed_forward_intermediate = ggml_mul_mat(ctx, norm1_output, linear1_weight);
-    feed_forward_intermediate = ggml_add_inplace(ctx, feed_forward_intermediate, linear1_bias);
-    feed_forward_intermediate = ggml_relu_inplace(ctx, feed_forward_intermediate);
-    
-    struct ggml_tensor *feed_forward_output = ggml_mul_mat(ctx, feed_forward_intermediate, linear2_weight);
-    feed_forward_output = ggml_add_inplace(ctx, feed_forward_output, linear2_bias);
-    
-    struct ggml_tensor *output = ggml_norm(ctx, feed_forward_output, 1e-5);
-    
-    return output;
+static struct ggml_tensor * get_transformer_encoder_layer(struct ggml_context * ctx, struct ggml_tensor * input, int n_heads, int d_model, int d_ff) {
+    int d_head = d_model / n_heads;
+
+    // Self-attention weights
+    struct ggml_tensor * Wq = ggml_get_tensor(ctx, "Wq");
+    struct ggml_tensor * bq = ggml_get_tensor(ctx, "bq");
+    struct ggml_tensor * Wk = ggml_get_tensor(ctx, "Wk");
+    struct ggml_tensor * bk = ggml_get_tensor(ctx, "bk");
+    struct ggml_tensor * Wv = ggml_get_tensor(ctx, "Wv");
+    struct ggml_tensor * bv = ggml_get_tensor(ctx, "bv");
+
+    // Self-attention
+    struct ggml_tensor * Q = get_linear(ctx, Wq, bq, input); // Query
+    struct ggml_tensor * K = get_linear(ctx, Wk, bk, input); // Key
+    struct ggml_tensor * V = get_linear(ctx, Wv, bv, input); // Value
+
+    struct ggml_tensor * Q_reshaped = ggml_reshape_4d(ctx, Q, d_head, n_heads, input->ne[1], input->ne[0]);
+    struct ggml_tensor * K_reshaped = ggml_reshape_4d(ctx, K, d_head, n_heads, input->ne[1], input->ne[0]);
+    struct ggml_tensor * V_reshaped = ggml_reshape_4d(ctx, V, d_head, n_heads, input->ne[1], input->ne[0]);
+
+    struct ggml_tensor * QK = ggml_mul_mat(ctx, Q_reshaped, ggml_transpose(ctx, K_reshaped));
+    struct ggml_tensor * attn_weights = ggml_soft_max(ctx, ggml_scale(ctx, QK, 1.0 / sqrt(d_head)));
+    struct ggml_tensor * attn_output = ggml_mul_mat(ctx, attn_weights, V_reshaped);
+
+    struct ggml_tensor * attn_output_reshaped = ggml_reshape_2d(ctx, attn_output, d_model, input->ne[1]);
+
+    struct ggml_tensor * W_o = ggml_get_tensor(ctx, "W_o");
+    struct ggml_tensor * b_o = ggml_get_tensor(ctx, "b_o");
+    struct ggml_tensor * attn_output_proj = get_linear(ctx, W_o, b_o, attn_output_reshaped);
+
+    // Add & Norm
+    struct ggml_tensor * attn_output_norm = ggml_norm(ctx, ggml_add(ctx, input, attn_output_proj), 1e-6);
+
+    // Feed Forward weights
+    struct ggml_tensor * W_ff1 = ggml_get_tensor(ctx, "W_ff1");
+    struct ggml_tensor * b_ff1 = ggml_get_tensor(ctx, "b_ff1");
+    struct ggml_tensor * W_ff2 = ggml_get_tensor(ctx, "W_ff2");
+    struct ggml_tensor * b_ff2 = ggml_get_tensor(ctx, "b_ff2");
+
+    // Feed Forward
+    struct ggml_tensor * ff_hidden = ggml_relu(ctx, get_linear(ctx, W_ff1, b_ff1, attn_output_norm));
+    struct ggml_tensor * ff_output = get_linear(ctx, W_ff2, b_ff2, ff_hidden);
+
+    // Add & Norm
+    struct ggml_tensor * encoder_output = ggml_norm(ctx, ggml_add(ctx, attn_output_norm, ff_output), 1e-6);
+
+    return encoder_output;
 }
 
 struct ggml_cgraph *create_graph(struct ggml_context *ctx, const phonemizer_model &model, struct ggml_tensor *input_tensor) {
@@ -130,7 +154,6 @@ struct ggml_cgraph *create_graph(struct ggml_context *ctx, const phonemizer_mode
     }
 
     x = get_embedding(ctx, model.tensors.at("embedding.weight"), x);
-    if (!x) return nullptr; // Check for null
     printf("Embedding done\n");
 
     x = get_positional_encoding(ctx, x, model.hparams.d_model, model.hparams.dropout);
@@ -142,15 +165,9 @@ struct ggml_cgraph *create_graph(struct ggml_context *ctx, const phonemizer_mode
         x = get_transformer_encoder_layer(
             ctx,
             x,
-            model.tensors.at(layer_prefix + ".self_attn.in_proj_weight"),
-            model.tensors.at(layer_prefix + ".self_attn.in_proj_bias"),
-            model.tensors.at(layer_prefix + ".self_attn.out_proj.weight"),
-            model.tensors.at(layer_prefix + ".self_attn.out_proj.bias"),
-            model.tensors.at(layer_prefix + ".linear1.weight"),
-            model.tensors.at(layer_prefix + ".linear1.bias"),
-            model.tensors.at(layer_prefix + ".linear2.weight"),
-            model.tensors.at(layer_prefix + ".linear2.bias"),
-            model.hparams.d_model
+            model.hparams.heads,
+            model.hparams.d_model,
+            model.hparams.d_fft
         );
     }
     printf("Transformer encoder done\n");
