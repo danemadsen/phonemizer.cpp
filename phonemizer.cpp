@@ -93,6 +93,9 @@ static struct ggml_tensor * get_linear(struct ggml_context * ctx, struct ggml_te
 static struct ggml_tensor * get_transformer_encoder_layer(struct ggml_context * ctx, struct ggml_tensor * input, int n_heads, int d_model, int d_ff) {
     int d_head = d_model / n_heads;
 
+    // Input shape
+    printf("Input shape: [%lld, %lld]\n", input->ne[0], input->ne[1]);
+
     // Self-attention weights
     struct ggml_tensor * Wq = ggml_get_tensor(ctx, "Wq");
     struct ggml_tensor * bq = ggml_get_tensor(ctx, "bq");
@@ -119,15 +122,29 @@ static struct ggml_tensor * get_transformer_encoder_layer(struct ggml_context * 
     struct ggml_tensor * K = get_linear(ctx, Wk, bk, input); // Key
     struct ggml_tensor * V = get_linear(ctx, Wv, bv, input); // Value
 
-    struct ggml_tensor * Q_reshaped = ggml_reshape_4d(ctx, Q, d_head, n_heads, input->ne[1], input->ne[0]);
-    struct ggml_tensor * K_reshaped = ggml_reshape_4d(ctx, K, d_head, n_heads, input->ne[1], input->ne[0]);
-    struct ggml_tensor * V_reshaped = ggml_reshape_4d(ctx, V, d_head, n_heads, input->ne[1], input->ne[0]);
+    printf("Q shape: [%lld, %lld]\n", Q->ne[0], Q->ne[1]);
+    printf("K shape: [%lld, %lld]\n", K->ne[0], K->ne[1]);
+    printf("V shape: [%lld, %lld]\n", V->ne[0], V->ne[1]);
+
+    // Reshape tensors to [batch_size, n_heads, seq_len, d_head]
+    struct ggml_tensor * Q_reshaped = ggml_reshape_4d(ctx, Q, d_head, n_heads, Q->ne[1], Q->ne[0] / d_model);
+    struct ggml_tensor * K_reshaped = ggml_reshape_4d(ctx, K, d_head, n_heads, K->ne[1], K->ne[0] / d_model);
+    struct ggml_tensor * V_reshaped = ggml_reshape_4d(ctx, V, d_head, n_heads, V->ne[1], V->ne[0] / d_model);
+
+    printf("Q_reshaped shape: [%lld, %lld, %lld, %lld]\n", Q_reshaped->ne[0], Q_reshaped->ne[1], Q_reshaped->ne[2], Q_reshaped->ne[3]);
+    printf("K_reshaped shape: [%lld, %lld, %lld, %lld]\n", K_reshaped->ne[0], K_reshaped->ne[1], K_reshaped->ne[2], K_reshaped->ne[3]);
+    printf("V_reshaped shape: [%lld, %lld, %lld, %lld]\n", V_reshaped->ne[0], V_reshaped->ne[1], V_reshaped->ne[2], V_reshaped->ne[3]);
+
+    GGML_ASSERT(Q_reshaped->ne[0] * Q_reshaped->ne[1] * Q_reshaped->ne[2] * Q_reshaped->ne[3] == Q->ne[0] * Q->ne[1]);
+    GGML_ASSERT(K_reshaped->ne[0] * K_reshaped->ne[1] * K_reshaped->ne[2] * K_reshaped->ne[3] == K->ne[0] * K->ne[1]);
+    GGML_ASSERT(V_reshaped->ne[0] * V_reshaped->ne[1] * V_reshaped->ne[2] * V_reshaped->ne[3] == V->ne[0] * V->ne[1]);
 
     struct ggml_tensor * QK = ggml_mul_mat(ctx, Q_reshaped, ggml_transpose(ctx, K_reshaped));
     struct ggml_tensor * attn_weights = ggml_soft_max(ctx, ggml_scale(ctx, QK, 1.0 / sqrt(d_head)));
     struct ggml_tensor * attn_output = ggml_mul_mat(ctx, attn_weights, V_reshaped);
 
-    struct ggml_tensor * attn_output_reshaped = ggml_reshape_2d(ctx, attn_output, d_model, input->ne[1]);
+    // Reshape attention output back to [batch_size, seq_len, d_model]
+    struct ggml_tensor * attn_output_reshaped = ggml_reshape_2d(ctx, attn_output, d_model, attn_output->ne[2]);
 
     struct ggml_tensor * W_o = ggml_get_tensor(ctx, "W_o");
     struct ggml_tensor * b_o = ggml_get_tensor(ctx, "b_o");
