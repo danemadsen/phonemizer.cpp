@@ -84,11 +84,10 @@ static struct ggml_tensor *get_positional_encoding(struct ggml_context *ctx, str
     return output;
 }
 
-static struct ggml_tensor *get_linear(struct ggml_context *ctx, struct ggml_tensor *weight, struct ggml_tensor *bias, struct ggml_tensor *input) {
-    struct ggml_tensor *output = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, input->ne[0], weight->ne[0]);
-    struct ggml_tensor *temp = ggml_mul_mat(ctx, weight, input);
-    output = ggml_add(ctx, temp, bias);
-    return output;
+static struct ggml_tensor * get_linear(struct ggml_context * ctx, struct ggml_tensor * W, struct ggml_tensor * b, struct ggml_tensor * input) {
+    struct ggml_tensor * out = ggml_mul_mat(ctx, W, input);
+    out = ggml_add(ctx, out, b);
+    return out;
 }
 
 static struct ggml_tensor * get_transformer_encoder_layer(struct ggml_context * ctx, struct ggml_tensor * input, int n_heads, int d_model, int d_ff) {
@@ -101,6 +100,19 @@ static struct ggml_tensor * get_transformer_encoder_layer(struct ggml_context * 
     struct ggml_tensor * bk = ggml_get_tensor(ctx, "bk");
     struct ggml_tensor * Wv = ggml_get_tensor(ctx, "Wv");
     struct ggml_tensor * bv = ggml_get_tensor(ctx, "bv");
+
+    // Initialize tensors if they are nullptr
+    int64_t d_model_dims[2] = {d_model, d_model};
+    int64_t d_model_single_dim[1] = {d_model};
+    int64_t d_ff_dims[2] = {d_ff, d_model};
+    int64_t d_ff_single_dim[1] = {d_ff};
+
+    if (!Wq) Wq = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, d_model_dims);
+    if (!bq) bq = ggml_new_tensor(ctx, GGML_TYPE_F32, 1, d_model_single_dim);
+    if (!Wk) Wk = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, d_model_dims);
+    if (!bk) bk = ggml_new_tensor(ctx, GGML_TYPE_F32, 1, d_model_single_dim);
+    if (!Wv) Wv = ggml_new_tensor(ctx, GGML_TYPE_F32, 2, d_model_dims);
+    if (!bv) bv = ggml_new_tensor(ctx, GGML_TYPE_F32, 1, d_model_single_dim);
 
     // Self-attention
     struct ggml_tensor * Q = get_linear(ctx, Wq, bq, input); // Query
