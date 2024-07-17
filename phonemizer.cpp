@@ -139,8 +139,14 @@ static struct ggml_tensor * get_transformer_encoder_layer(struct ggml_context * 
     GGML_ASSERT(K_reshaped->ne[0] * K_reshaped->ne[1] * K_reshaped->ne[2] * K_reshaped->ne[3] == K->ne[0] * K->ne[1]);
     GGML_ASSERT(V_reshaped->ne[0] * V_reshaped->ne[1] * V_reshaped->ne[2] * V_reshaped->ne[3] == V->ne[0] * V->ne[1]);
 
-    struct ggml_tensor * QK = ggml_mul_mat(ctx, Q_reshaped, ggml_transpose(ctx, K_reshaped));
+    struct ggml_tensor * QK = ggml_mul_mat(ctx, Q_reshaped, K_reshaped);
+
+    printf("QK shape: [%lld, %lld, %lld, %lld]\n", QK->ne[0], QK->ne[1], QK->ne[2], QK->ne[3]);
+    
     struct ggml_tensor * attn_weights = ggml_soft_max(ctx, ggml_scale(ctx, QK, 1.0 / sqrt(d_head)));
+
+    printf("attn_weights shape: [%lld, %lld, %lld, %lld]\n", attn_weights->ne[0], attn_weights->ne[1], attn_weights->ne[2], attn_weights->ne[3]);
+
     struct ggml_tensor * attn_output = ggml_mul_mat(ctx, attn_weights, V_reshaped);
 
     // Reshape attention output back to [batch_size, seq_len, d_model]
