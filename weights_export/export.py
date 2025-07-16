@@ -40,7 +40,21 @@ def parse_model(model: torch.nn.Module, gguf_writer: GGUFWriter):
     for name, var_data in checkpoint.items():
         var_data = var_data.cpu().numpy().squeeze().astype(np.float32)
         gguf_writer.add_tensor(name, var_data)
-        print(f"Processing variable: {name} with shape: {var_data.shape}")
+        print(f"[tensor] {name} shape: {var_data.shape}")
+
+    # Export pos_encoding manually
+    if hasattr(model, 'pos_encoder') and hasattr(model.pos_encoder, 'pe'):
+        pe = model.pos_encoder.pe  # [5000, 1, 512]
+        print(f"[pos_encoding] Original model shape: {pe.shape}")
+        pe = pe.squeeze(1)         # [5000, 512]
+        print(f"[pos_encoding] After squeeze(1): {pe.shape}")
+        pe = pe[:64]               # [64, 512]
+        print(f"[pos_encoding] After truncation to 64 positions: {pe.shape}")
+        pe = pe.reshape(1, 1, 64, 512)  # [1, 1, 64, 512]
+        print(f"[pos_encoding] Final GGUF export shape: {pe.shape}")
+        
+        gguf_writer.add_tensor("pos_encoding", pe.numpy().astype(np.float32))  # 🔧 Fix is here
+        print("✅ pos_encoding added to GGUF")
 
 if __name__ == "__main__":
     checkpoint_path = "./en_us_cmudict_ipa_forward.pt"
@@ -61,6 +75,8 @@ if __name__ == "__main__":
 
     # Insert weights
     parse_model(model, gguf_writer)
+
+    print(model.pos_encoder.pe.shape)
 
     # Save model and hyperparameters to file
     gguf_writer.write_header_to_file()

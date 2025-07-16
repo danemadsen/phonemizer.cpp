@@ -54,17 +54,27 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
     struct phonemizer_model_hparams *hp = &model->hparams;
 
     struct ggml_cgraph *gf = ggml_new_graph_custom(ctx, GGML_DEFAULT_GRAPH_SIZE, false);
+    printf("New Graph\n");
 
     // [T, N] input_tokens is a GGML tensor of type GGML_TYPE_I32 with token indices
 
     // 1. Embedding: [T, N] → [T, N, D]
     struct ggml_tensor *emb_table = model->tensors["embedding.weight"]; // [V, D]
     struct ggml_tensor *x = ggml_get_rows(ctx, emb_table, input_tokens); // [T, N, D]
+    printf("Embedding done\n");
 
     // 2. Positional Encoding
-    struct ggml_tensor *pos_encoding = model->tensors["pos_encoding"]; // [T, D]
+    auto it = model->tensors.find("pos_encoding");
+    if (it == model->tensors.end() || it->second == nullptr) {
+        fprintf(stderr, "ERROR: pos_encoding tensor missing or null\n");
+        exit(1);
+    }
+    struct ggml_tensor *pos_encoding = it->second; // [T, D]
+    printf("x shape: [%ld, %ld, %ld, %ld]\n", x->ne[0], x->ne[1], x->ne[2], x->ne[3]);
+    printf("pos_encoding shape: [%ld, %ld, %ld, %ld]\n", pos_encoding->ne[0], pos_encoding->ne[1], pos_encoding->ne[2], pos_encoding->ne[3]);
     struct ggml_tensor *pe_expanded = ggml_repeat(ctx, pos_encoding, x); // [T, N, D]
     x = ggml_add(ctx, x, pe_expanded); // [T, N, D]
+    printf("Positional Encoding done\n");
 
     // 3. TransformerEncoder layers
     for (int i = 0; i < hp->layers; i++) {
@@ -116,14 +126,17 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
 
         x = ggml_add(ctx, x, ff); // Residual
     }
+    printf("Transformer layers done\n");
 
     // 4. Final projection to decoder_vocab_size
     struct ggml_tensor *fc_w = model->tensors["fc_out.weight"]; // [V_out, D]
     struct ggml_tensor *fc_b = model->tensors["fc_out.bias"];   // [V_out]
     x = ggml_add(ctx, ggml_mul_mat(ctx, fc_w, x), fc_b);        // [T, N, V_out]
+    printf("Final projection done\n");
 
     // 5. Transpose back to [N, T, V_out] if needed (not always necessary depending on final usage)
     x = ggml_permute(ctx, x, 1, 0, 2, 3); // [T, N, V] → [N, T, V]
+    printf("Transpose done\n");
 
     // Register final node
     ggml_build_forward_expand(gf, x);
@@ -262,11 +275,6 @@ void load_model(const std::string &fname, phonemizer_model &model) {
     model.hparams.layers = get_i32(ctx, "layers");
     model.hparams.dropout = get_f32(ctx, "dropout");
     model.hparams.heads = get_i32(ctx, "heads");
-    
-    for (auto &entry : model.tensors) {
-        const std::string &name = entry.first;
-        entry.second = ggml_get_tensor(model.ctx, name.c_str());
-    }
 
     gguf_free(ctx);
 }
