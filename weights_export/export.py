@@ -37,24 +37,44 @@ def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor:
 
 def parse_model(model: torch.nn.Module, gguf_writer: GGUFWriter):
     checkpoint = model.state_dict()
+
     for name, var_data in checkpoint.items():
-        var_data = var_data.cpu().numpy().squeeze().astype(np.float32)
-        gguf_writer.add_tensor(name, var_data)
-        print(f"[tensor] {name} shape: {var_data.shape}")
+        if "self_attn.in_proj_weight" in name or "self_attn.in_proj_bias" in name:
+            # Split QKV weights/biases into separate tensors
+            layer_prefix = name.rsplit(".self_attn.in_proj_", 1)[0]
+            is_bias = "bias" in name
+            var_data = var_data.cpu().numpy().astype(np.float32)
+
+            d_model = var_data.shape[1] if not is_bias else var_data.shape[0] // 3
+
+            if is_bias:
+                bq = var_data[0 * d_model:1 * d_model]
+                bk = var_data[1 * d_model:2 * d_model]
+                bv = var_data[2 * d_model:3 * d_model]
+                gguf_writer.add_tensor(f"{layer_prefix}.self_attn.q_proj.bias", bq)
+                gguf_writer.add_tensor(f"{layer_prefix}.self_attn.k_proj.bias", bk)
+                gguf_writer.add_tensor(f"{layer_prefix}.self_attn.v_proj.bias", bv)
+                print(f"[split bias] {layer_prefix}.self_attn.[q/k/v]_proj.bias → shape: ({d_model},)")
+            else:
+                wq = var_data[0 * d_model:1 * d_model, :]
+                wk = var_data[1 * d_model:2 * d_model, :]
+                wv = var_data[2 * d_model:3 * d_model, :]
+                gguf_writer.add_tensor(f"{layer_prefix}.self_attn.q_proj.weight", wq)
+                gguf_writer.add_tensor(f"{layer_prefix}.self_attn.k_proj.weight", wk)
+                gguf_writer.add_tensor(f"{layer_prefix}.self_attn.v_proj.weight", wv)
+                print(f"[split weight] {layer_prefix}.self_attn.[q/k/v]_proj.weight → shape: ({d_model}, {var_data.shape[1]})")
+        else:
+            var_data = var_data.cpu().numpy().astype(np.float32)
+            gguf_writer.add_tensor(name, var_data)
+            print(f"[tensor] {name} shape: {var_data.shape}")
 
     # Export pos_encoding manually
     if hasattr(model, 'pos_encoder') and hasattr(model.pos_encoder, 'pe'):
         pe = model.pos_encoder.pe  # [5000, 1, 512]
-        print(f"[pos_encoding] Original model shape: {pe.shape}")
         pe = pe.squeeze(1)         # [5000, 512]
-        print(f"[pos_encoding] After squeeze(1): {pe.shape}")
         pe = pe[:64]               # [64, 512]
-        print(f"[pos_encoding] After truncation to 64 positions: {pe.shape}")
         pe = pe.reshape(1, 1, 64, 512)  # [1, 1, 64, 512]
-        print(f"[pos_encoding] Final GGUF export shape: {pe.shape}")
-        
-        gguf_writer.add_tensor("pos_encoding", pe.numpy().astype(np.float32))  # 🔧 Fix is here
-        print("✅ pos_encoding added to GGUF")
+        gguf_writer.add_tensor("pos_encoding", pe.numpy().astype(np.float32))
 
 if __name__ == "__main__":
     checkpoint_path = "./en_us_cmudict_ipa_forward.pt"
@@ -76,7 +96,8 @@ if __name__ == "__main__":
     # Insert weights
     parse_model(model, gguf_writer)
 
-    print(model.pos_encoder.pe.shape)
+    for name in model.state_dict().keys():
+        print(name)
 
     # Save model and hyperparameters to file
     gguf_writer.write_header_to_file()

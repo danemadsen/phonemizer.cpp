@@ -80,6 +80,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
     for (int i = 0; i < hp->layers; i++) {
         char prefix[64];
         snprintf(prefix, sizeof(prefix), "encoder.layers.%d", i);
+        printf("=== LAYER %d ===\n", i);
 
         struct ggml_tensor *Wq = model->tensors[std::string(prefix) + ".self_attn.q_proj.weight"];
         struct ggml_tensor *Bq = model->tensors[std::string(prefix) + ".self_attn.q_proj.bias"];
@@ -90,41 +91,41 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
         struct ggml_tensor *Wo = model->tensors[std::string(prefix) + ".self_attn.out_proj.weight"];
         struct ggml_tensor *Bo = model->tensors[std::string(prefix) + ".self_attn.out_proj.bias"];
 
+        printf("Weights loaded for attention\n");
+
         // Optionally normalize first
         x = ggml_rms_norm(ctx, x, 1e-5f);
+        printf("rms_norm done\n");
 
-        // Self-attention q/k/v
-        struct ggml_tensor *q = ggml_add(ctx, ggml_mul_mat(ctx, Wq, x), Bq);
-        struct ggml_tensor *k = ggml_add(ctx, ggml_mul_mat(ctx, Wk, x), Bk);
-        struct ggml_tensor *v = ggml_add(ctx, ggml_mul_mat(ctx, Wv, x), Bv);
+        struct ggml_tensor *q = ggml_add(ctx, ggml_mul_mat(ctx, Wq, x), Bq); printf("q done\n");
+        struct ggml_tensor *k = ggml_add(ctx, ggml_mul_mat(ctx, Wk, x), Bk); printf("k done\n");
+        struct ggml_tensor *v = ggml_add(ctx, ggml_mul_mat(ctx, Wv, x), Bv); printf("v done\n");
 
-        // Flash attention (ext)
         struct ggml_tensor *attn_out = ggml_flash_attn_ext(
             ctx, q, k, v,
-            NULL, // or padding mask
-            1.0f / sqrtf((float)(hp->d_model / hp->heads)),  // scale
+            NULL,
+            1.0f / sqrtf((float)(hp->d_model / hp->heads)),
             0.0f,
             -INFINITY
         );
+        printf("flash_attn done\n");
+
         ggml_flash_attn_ext_set_prec(attn_out, GGML_PREC_F32);
+        attn_out = ggml_add(ctx, ggml_mul_mat(ctx, Wo, attn_out), Bo); printf("proj done\n");
+        x = ggml_add(ctx, x, attn_out); printf("residual add done\n");
 
-        // Output projection
-        attn_out = ggml_add(ctx, ggml_mul_mat(ctx, Wo, attn_out), Bo);
-
-        // Residual
-        x = ggml_add(ctx, x, attn_out);
-
-        // Feedforward (dense → relu → dense)
         struct ggml_tensor *W1 = model->tensors[std::string(prefix) + ".linear1.weight"];
         struct ggml_tensor *B1 = model->tensors[std::string(prefix) + ".linear1.bias"];
         struct ggml_tensor *W2 = model->tensors[std::string(prefix) + ".linear2.weight"];
         struct ggml_tensor *B2 = model->tensors[std::string(prefix) + ".linear2.bias"];
 
-        struct ggml_tensor *ff = ggml_add(ctx, ggml_mul_mat(ctx, W1, x), B1);
-        ff = ggml_relu(ctx, ff);
-        ff = ggml_add(ctx, ggml_mul_mat(ctx, W2, ff), B2);
+        printf("Weights loaded for feedforward\n");
 
-        x = ggml_add(ctx, x, ff); // Residual
+        struct ggml_tensor *ff = ggml_add(ctx, ggml_mul_mat(ctx, W1, x), B1); printf("ff1 done\n");
+        ff = ggml_relu(ctx, ff); printf("relu done\n");
+        ff = ggml_add(ctx, ggml_mul_mat(ctx, W2, ff), B2); printf("ff2 done\n");
+
+        x = ggml_add(ctx, x, ff); printf("residual ff add done\n");
     }
     printf("Transformer layers done\n");
 
