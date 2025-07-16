@@ -67,7 +67,7 @@ void load_model(const std::string &fname, phonemizer_model &model);
  * @param model The phonemizer_model.
  * @return The result tensor.
  */
-struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx, const phonemizer_model &model);
+//struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx, const phonemizer_model &model);
 
 /**
  * Computes the result of a given model on the input data.
@@ -76,4 +76,4 @@ struct ggml_tensor *forward(ggml_tensor *input_tensor, struct ggml_context *ctx,
  * @param input The input data as a vector of floats.
  * @return The computed result as a ggml_tensor pointer.
  */
-struct ggml_tensor *compute(const phonemizer_model &model, const std::vector<float> &input);
+struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<float> &input);

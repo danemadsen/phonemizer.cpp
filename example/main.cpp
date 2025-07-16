@@ -20,7 +20,7 @@ int main(void)
     std::vector<float> input_data(vocab_size);
     std::iota(input_data.begin(), input_data.end(), 0);
 
-    struct ggml_tensor *result = compute(model, input_data);
+    struct ggml_tensor *result = compute(&model, input_data);
     printf("Forward computed\n");
 
     // Printing
