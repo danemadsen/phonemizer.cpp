@@ -112,6 +112,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
 
         ggml_flash_attn_ext_set_prec(attn_out, GGML_PREC_F32);
         attn_out = ggml_add(ctx, ggml_mul_mat(ctx, Wo, attn_out), Bo); printf("proj done\n");
+        attn_out = ggml_permute(ctx, attn_out, 0, 2, 1, 3); printf("permute done\n");
         x = ggml_add(ctx, x, attn_out); printf("residual add done\n");
 
         struct ggml_tensor *W1 = model->tensors[std::string(prefix) + ".linear1.weight"];
