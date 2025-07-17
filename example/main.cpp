@@ -7,6 +7,7 @@
 
 int main(void)
 {
+    ggml_backend_load_all();
     ggml_time_init();
 
     // Load model and run forward

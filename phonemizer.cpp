@@ -174,7 +174,11 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<fl
     }
     printf("GRAPH CREATION DONE\n");
 
-    ggml_backend_graph_compute(model->backend, gf);
+    ggml_backend_tensor_set(input_tensor, input_tensor->data, 0, ggml_nbytes(input_tensor));
+    if (ggml_backend_graph_compute(model->backend, gf) != GGML_STATUS_SUCCESS) {
+        fprintf(stderr, "%s: ggml_backend_graph_compute() failed\n", __func__);
+        return;
+    }
     printf("GRAPH COMPUTE DONE\n");
 
     struct ggml_tensor *result = ggml_get_tensor(ctx, "fc_out.weight");
