@@ -53,7 +53,9 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
     struct ggml_context *ctx = model->ctx;
     struct phonemizer_model_hparams *hp = &model->hparams;
 
+    ggml_gallocr_t allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model->backend));
     struct ggml_cgraph *gf = ggml_new_graph_custom(ctx, GGML_DEFAULT_GRAPH_SIZE, false);
+    ggml_gallocr_alloc_graph(allocr, gf);
     printf("New Graph\n");
 
     // [T, N] input_tokens is a GGML tensor of type GGML_TYPE_I32 with token indices
@@ -159,9 +161,7 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<fl
     struct ggml_context *ctx = ggml_init(params);
     
     struct ggml_tensor *input_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, input.size());
-    for (size_t i = 0; i < input.size(); ++i) {
-        ((int32_t *)input_tensor->data)[i] = static_cast<int32_t>(input[i]);
-    }
+    memcpy(input_tensor->data, input.data(), ggml_nbytes(input_tensor));
     ggml_set_name(input_tensor, "input_tensor");
 
     printf("MEMCPY DONE\n");
@@ -174,10 +174,10 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<fl
     }
     printf("GRAPH CREATION DONE\n");
 
-    ggml_backend_tensor_set(input_tensor, input_tensor->data, 0, ggml_nbytes(input_tensor));
+    printf("Backend: %s\n", ggml_backend_name(model->backend));
     if (ggml_backend_graph_compute(model->backend, gf) != GGML_STATUS_SUCCESS) {
         fprintf(stderr, "%s: ggml_backend_graph_compute() failed\n", __func__);
-        return;
+        return nullptr;
     }
     printf("GRAPH COMPUTE DONE\n");
 
