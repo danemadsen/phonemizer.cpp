@@ -142,6 +142,9 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
     x = ggml_permute(ctx, x, 1, 0, 2, 3); // [T, N, V] → [N, T, V]
     printf("Transpose done\n");
 
+    // Set a known name for the final output tensor
+    ggml_set_name(x, "output_tensor");
+
     // Register final node
     ggml_build_forward_expand(gf, x);
 
@@ -149,7 +152,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
 }
 
 struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<float> &input) {
-    int32_t vocab_size = model->hparams.encoder_vocab_size; 
+    int32_t vocab_size = model->hparams.encoder_vocab_size;
 
     static size_t buf_size = vocab_size * sizeof(float) * 1024 * 1024;
     static void *buf = malloc(buf_size);
@@ -159,32 +162,45 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<fl
         false,
     };
     struct ggml_context *ctx = ggml_init(params);
-    
-    struct ggml_tensor *input_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, input.size());
-    memcpy(input_tensor->data, input.data(), ggml_nbytes(input_tensor));
-    ggml_set_name(input_tensor, "input_tensor");
 
-    printf("MEMCPY DONE\n");
+    struct ggml_tensor *input_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, input.size());
+    for (size_t i = 0; i < input.size(); ++i) {
+        ((int32_t *)input_tensor->data)[i] = static_cast<int32_t>(input[i]);
+    }
+    ggml_set_name(input_tensor, "input_tensor");
 
     struct ggml_cgraph *gf = create_graph(model, input_tensor);
     if (!gf) {
-        printf("Error during graph creation\n");
+        fprintf(stderr, "Error during graph creation\n");
         ggml_free(ctx);
         return nullptr;
     }
-    printf("GRAPH CREATION DONE\n");
+    printf("Graph created successfully\n");
 
-    printf("Backend: %s\n", ggml_backend_name(model->backend));
     if (ggml_backend_graph_compute(model->backend, gf) != GGML_STATUS_SUCCESS) {
-        fprintf(stderr, "%s: ggml_backend_graph_compute() failed\n", __func__);
+        fprintf(stderr, "ggml_backend_graph_compute() failed\n");
+        ggml_free(ctx);
         return nullptr;
     }
-    printf("GRAPH COMPUTE DONE\n");
+    printf("Graph computation done\n");
 
-    struct ggml_tensor *result = ggml_get_tensor(ctx, "fc_out.weight");
+    // Retrieve the computed tensor (last node in the graph)
+    struct ggml_tensor *result = ggml_graph_get_tensor(gf, "output_tensor");
+    printf("Result recieved\n");
 
-    ggml_free(ctx);
-    return result;
+    // Copy result tensor to a new context to return safely
+    struct ggml_context *result_ctx = ggml_init({
+        ggml_tensor_overhead() + ggml_nbytes(result),
+        nullptr,
+        false,
+    });
+    printf("Result context initialized\n");
+
+    struct ggml_tensor *result_copy = ggml_dup_tensor(result_ctx, result);
+    memcpy(result_copy->data, result->data, ggml_nbytes(result));
+
+    ggml_free(ctx);  // Free computation context
+    return result_copy;  // Return safe copy
 }
 
 void load_model(const std::string &fname, phonemizer_model &model) {
