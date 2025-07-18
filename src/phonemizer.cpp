@@ -44,9 +44,9 @@ static int32_t get_i32(const gguf_context *ctx, const std::string &key) {
     return gguf_get_val_i32(ctx, i);
 }
 
-static float get_f32(const gguf_context *ctx, const std::string &key) {
+static const char * get_str(const gguf_context *ctx, const std::string &key) {
     const int i = get_key_idx(ctx, key.c_str());
-    return gguf_get_val_f32(ctx, i);
+    return gguf_get_val_str(ctx, i);
 }
 
 struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_tensor *input_tokens) {
@@ -292,11 +292,11 @@ void load_model(const std::string &fname, phonemizer_model &model) {
     fin.close();
 
     model.hparams.encoder_vocab_size = get_i32(ctx, "encoder_vocab_size");
+    model.hparams.encoder_symbols = get_str(ctx, "encoder_symbols");
     model.hparams.decoder_vocab_size = get_i32(ctx, "decoder_vocab_size");
+    model.hparams.decoder_symbols = get_str(ctx, "decoder_symbols");
     model.hparams.d_model = get_i32(ctx, "d_model");
-    model.hparams.d_fft = get_i32(ctx, "d_fft");
     model.hparams.layers = get_i32(ctx, "layers");
-    model.hparams.dropout = get_f32(ctx, "dropout");
     model.hparams.heads = get_i32(ctx, "heads");
 
     gguf_free(ctx);

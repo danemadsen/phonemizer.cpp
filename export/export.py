@@ -9,13 +9,26 @@ def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor:
     # List of hyperparameters to add
     hyperparams = [
         ("encoder_vocab_size", int),
+        ("encoder_symbols", str),
         ("decoder_vocab_size", int),
+        ("decoder_symbols", str),
         ("d_model", int),
-        ("d_fft", int),
         ("layers", int),
-        ("dropout", float),
         ("heads", int),
     ]
+
+    preprocessing = config['preprocessing']
+
+    text_symbols = ''
+    for symbol in preprocessing['text_symbols']:
+        text_symbols += symbol + ' '
+    print(f"Text symbols: {text_symbols}")
+
+    phoneme_symbols = ''
+    for symbol in preprocessing['phoneme_symbols']:
+        phoneme_symbols += symbol + ' '
+    phoneme_symbols += '. , : ; ? ! \" ( ) -'
+    print(f"Phoneme symbols: {phoneme_symbols}")
 
     # Add each hyperparameter if it exists in the config
     for param, dtype in hyperparams:
@@ -24,6 +37,10 @@ def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor:
                 value = preprocessor.text_tokenizer.vocab_size
             elif param == "decoder_vocab_size":
                 value = preprocessor.phoneme_tokenizer.vocab_size
+            elif param == "encoder_symbols":
+                value = text_symbols.strip()
+            elif param == "decoder_symbols":
+                value = phoneme_symbols.strip()
             else:
                 value = config['model'][param]
 
@@ -31,6 +48,8 @@ def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor:
                 gguf_writer.add_int32(param, value)
             elif dtype == float:
                 gguf_writer.add_float32(param, value)
+            elif dtype == str:
+                gguf_writer.add_string(param, value)
             print(f"Added hyperparameter {param} with value {value}")
         except KeyError:
             print(f"Warning: {param} not found in config")
