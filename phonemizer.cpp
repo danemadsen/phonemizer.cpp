@@ -240,7 +240,7 @@ void load_model(const std::string &fname, phonemizer_model &model) {
 
     model_size += 10 * 1024 * 1024;
 
-    model.backend = ggml_backend_init_best();
+    model.backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
     if (!model.backend) {
         throw std::runtime_error(format("%s: ggml_backend_cpu_init() failed\n", __func__));
     }
