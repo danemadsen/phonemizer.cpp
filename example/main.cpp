@@ -18,20 +18,20 @@ int main(void)
     int vocab_size = model.hparams.encoder_vocab_size;
 
     // Create example tensor with valid indices
-    std::vector<float> input_data(vocab_size);
+    std::vector<int64_t> input_data(vocab_size);
     std::iota(input_data.begin(), input_data.end(), 0);
 
     struct ggml_tensor *result = compute(&model, input_data);
     printf("Forward computed\n");
 
     // Printing
-    std::vector<float> out_data(ggml_nelements(result));
+    std::vector<int64_t> out_data(ggml_nelements(result));
     memcpy(out_data.data(), result->data, ggml_nbytes(result));
 
     printf("Result: [");
     for (int i = 0; i < result->ne[0]; i++)
     {
-        printf("%.2f, ", out_data[i]);
+        printf("%ld, ", out_data[i]);
     }
     printf("]\n");
 

@@ -152,10 +152,10 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
     return gf;
 }
 
-struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<float> &input) {
+struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<int64_t> &input) {
     int32_t vocab_size = model->hparams.encoder_vocab_size;
 
-    static size_t buf_size = vocab_size * sizeof(float) * 1024 * 1024;
+    static size_t buf_size = vocab_size * sizeof(int64_t) * 1024 * 1024;
     static void *buf = malloc(buf_size);
     struct ggml_init_params params = {
         buf_size,
@@ -166,7 +166,7 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<fl
 
     struct ggml_tensor *input_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, input.size());
     for (size_t i = 0; i < input.size(); ++i) {
-        ((int32_t *)input_tensor->data)[i] = static_cast<int32_t>(input[i]);
+        ((int32_t *)input_tensor->data)[i] = input[i];
     }
     ggml_set_name(input_tensor, "input_tensor");
 
