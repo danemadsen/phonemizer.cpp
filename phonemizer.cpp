@@ -53,9 +53,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
     struct ggml_context *ctx = model->ctx;
     struct phonemizer_model_hparams *hp = &model->hparams;
 
-    ggml_gallocr_t allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model->backend));
     struct ggml_cgraph *gf = ggml_new_graph_custom(ctx, GGML_DEFAULT_GRAPH_SIZE, false);
-    ggml_gallocr_alloc_graph(allocr, gf);
     printf("New Graph\n");
 
     // [T, N] input_tokens is a GGML tensor of type GGML_TYPE_I32 with token indices
@@ -147,6 +145,9 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
 
     // Register final node
     ggml_build_forward_expand(gf, x);
+
+    ggml_gallocr_t allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model->backend));
+    ggml_gallocr_alloc_graph(allocr, gf);
 
     return gf;
 }
