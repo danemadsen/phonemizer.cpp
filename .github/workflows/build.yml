@@ -28,4 +28,4 @@ jobs:
 
       - name: Test Run
         working-directory: ./build
-        run: ./example/main
+        run: ./bin/main
