@@ -31,9 +31,9 @@ static std::string format(const char *fmt, ...) {
     return std::string(buf.data(), buf.size());
 }
 
-struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_tensor *input_tokens) {
+struct ggml_cgraph *create_graph(phonemizer_model *model, struct ggml_tensor *input_tokens) {
     struct ggml_context *ctx = model->ctx;
-    struct phonemizer_model_hparams *hp = &model->hparams;
+    phonemizer_model_hparams *hp = &model->hparams;
 
     struct ggml_cgraph *gf = ggml_new_graph_custom(ctx, GGML_DEFAULT_GRAPH_SIZE, false);
 
@@ -117,7 +117,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
     return gf;
 }
 
-struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<int64_t> &input) {
+struct ggml_tensor *compute(phonemizer_model *model, const std::vector<int64_t> &input) {
     int32_t vocab_size = model->hparams.encoder_vocab_size;
 
     static size_t buf_size = vocab_size * sizeof(int64_t) * 1024 * 1024;
@@ -165,10 +165,10 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<in
     return result_copy;  // Return safe copy
 }
 
-struct phonemizer_model phonemizer_load(const std::string &fname) {
+phonemizer_model phonemizer_load(const std::string &fname) {
     fprintf(stderr, "%s: loading model from '%s'\n", __func__, fname.c_str());
 
-    struct phonemizer_model model;
+    phonemizer_model model;
 
     struct ggml_context *meta = NULL;
 
@@ -270,7 +270,7 @@ struct phonemizer_model phonemizer_load(const std::string &fname) {
     return model;
 }
 
-void phonemizer_free(struct phonemizer_model *model) {
+void phonemizer_free(phonemizer_model *model) {
     if (model->ctx) {
         ggml_free(model->ctx);
         model->ctx = nullptr;

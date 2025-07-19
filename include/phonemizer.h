@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-struct phonemizer_model_hparams {
+typedef struct {
     const char * languages = nullptr;
     int32_t encoder_vocab_size = 1;
     const char * encoder_symbols = nullptr;
@@ -16,9 +16,9 @@ struct phonemizer_model_hparams {
     int32_t d_model = 512;
     int32_t layers = 4;
     int32_t heads = 1;
-};
+} phonemizer_model_hparams;
 
-struct phonemizer_model
+typedef struct
 {
     phonemizer_model_hparams hparams;
 
@@ -35,10 +35,10 @@ struct phonemizer_model
     std::map<std::string, struct ggml_tensor *> tensors;
 
     ggml_backend_buffer_t buffer;
-};
+} phonemizer_model;
 
-struct phonemizer_model phonemizer_load(const std::string &fname);
+phonemizer_model phonemizer_load(const std::string &fname);
 
-void phonemizer_free(struct phonemizer_model *model);
+void phonemizer_free(phonemizer_model *model);
 
-struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<int64_t> &input);
+struct ggml_tensor *compute(phonemizer_model *model, const std::vector<int64_t> &input);
