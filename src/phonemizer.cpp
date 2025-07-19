@@ -16,6 +16,37 @@
 #include <cstdarg>
 #include <cmath>
 
+struct phonemizer_model_hparams {
+    const char * languages = nullptr;
+    int32_t encoder_vocab_size = 1;
+    const char * encoder_symbols = nullptr;
+    int32_t decoder_vocab_size = 1;
+    const char * decoder_symbols = nullptr;
+    int8_t char_repeats = 1;
+    bool lowercase = true;
+    int32_t d_model = 512;
+    int32_t layers = 4;
+    int32_t heads = 1;
+};
+
+struct phonemizer_model {
+    phonemizer_model_hparams hparams;
+
+    ggml_backend_t backend = NULL;
+    ggml_backend_buffer_t buffer_w;
+
+    // weights
+    struct ggml_tensor *weights;
+    struct ggml_tensor *bias;
+
+    // the context to define the tensor information (dimensions, size, memory data)
+    struct ggml_context *ctx;
+
+    std::map<std::string, struct ggml_tensor *> tensors;
+
+    ggml_backend_buffer_t buffer;
+};
+
 static std::string format(const char *fmt, ...) {
     va_list ap;
     va_list ap2;
@@ -31,7 +62,7 @@ static std::string format(const char *fmt, ...) {
     return std::string(buf.data(), buf.size());
 }
 
-struct ggml_cgraph *create_graph(phonemizer_model *model, struct ggml_tensor *input_tokens) {
+struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_tensor *input_tokens) {
     struct ggml_context *ctx = model->ctx;
     phonemizer_model_hparams *hp = &model->hparams;
 
@@ -117,7 +148,7 @@ struct ggml_cgraph *create_graph(phonemizer_model *model, struct ggml_tensor *in
     return gf;
 }
 
-struct ggml_tensor *compute(phonemizer_model *model, const std::vector<int64_t> &input) {
+struct ggml_tensor *compute(struct phonemizer_model * model, const std::vector<int64_t> &input) {
     int32_t vocab_size = model->hparams.encoder_vocab_size;
 
     static size_t buf_size = vocab_size * sizeof(int64_t) * 1024 * 1024;
@@ -165,10 +196,10 @@ struct ggml_tensor *compute(phonemizer_model *model, const std::vector<int64_t> 
     return result_copy;  // Return safe copy
 }
 
-phonemizer_model phonemizer_load(const std::string &fname) {
-    fprintf(stderr, "%s: loading model from '%s'\n", __func__, fname.c_str());
+struct phonemizer_model * phonemizer_load(const char * fname) {
+    fprintf(stderr, "%s: loading model from '%s'\n", __func__, fname);
 
-    phonemizer_model model;
+    struct phonemizer_model * model = new phonemizer_model();
 
     struct ggml_context *meta = NULL;
 
@@ -177,15 +208,15 @@ phonemizer_model phonemizer_load(const std::string &fname) {
         &meta,
     };
 
-    struct gguf_context *ctx = gguf_init_from_file(fname.c_str(), gguf_params);
+    struct gguf_context *ctx = gguf_init_from_file(fname, gguf_params);
 
     if (!ctx) {
-        throw std::runtime_error(format("%s: failed to open '%s'\n", __func__, fname.c_str()));
+        throw std::runtime_error(format("%s: failed to open '%s'\n", __func__, fname));
     }
 
     const int n_tensors = gguf_get_n_tensors(ctx);
     const int n_kv = gguf_get_n_kv(ctx);
-    printf("%s: loaded meta data with %d key-value pairs and %d tensors from %s\n", __func__, n_kv, n_tensors, fname.c_str());
+    printf("%s: loaded meta data with %d key-value pairs and %d tensors from %s\n", __func__, n_kv, n_tensors, fname);
 
     size_t model_size = 0;
 
@@ -196,15 +227,12 @@ phonemizer_model phonemizer_load(const std::string &fname) {
         struct ggml_tensor *cur = ggml_get_tensor(meta, name);
         size_t tensor_size = ggml_nbytes(cur);
         model_size += tensor_size;
-
-        printf("%s: tensor[%d]: n_dims = %d, name = %s, tensor_size=%zu, offset=%zu, shape: [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "], type = %s\n",
-               __func__, i, ggml_n_dims(cur), cur->name, tensor_size, offset, cur->ne[0], cur->ne[1], cur->ne[2], cur->ne[3], ggml_type_name(type));
     }
 
     model_size += 10 * 1024 * 1024;
 
-    model.backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
-    if (!model.backend) {
+    model->backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
+    if (!model->backend) {
         throw std::runtime_error(format("%s: ggml_backend_cpu_init() failed\n", __func__));
     }
 
@@ -214,33 +242,33 @@ phonemizer_model phonemizer_load(const std::string &fname) {
         true
     };
 
-    model.ctx = ggml_init(ggml_params);
+    model->ctx = ggml_init(ggml_params);
 
-    if (!model.ctx) {
+    if (!model->ctx) {
         throw std::runtime_error(format("%s: ggml_init() failed\n", __func__));
     }
 
     for (int i = 0; i < n_tensors; ++i) {
         const char *name = gguf_get_tensor_name(ctx, i);
-        struct ggml_tensor *cur = ggml_dup_tensor(model.ctx, ggml_get_tensor(meta, name));
+        struct ggml_tensor *cur = ggml_dup_tensor(model->ctx, ggml_get_tensor(meta, name));
         ggml_set_name(cur, name);
-        model.tensors[name] = cur;
+        model->tensors[name] = cur;
     }
 
     auto fin = std::ifstream(fname, std::ios::binary);
 
     if (!fin) {
-        fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname.c_str());
+        fprintf(stderr, "%s: failed to open '%s'\n", __func__, fname);
     }
 
-    model.buffer = ggml_backend_alloc_ctx_tensors(model.ctx, model.backend);
-    if (!model.buffer) {
+    model->buffer = ggml_backend_alloc_ctx_tensors(model->ctx, model->backend);
+    if (!model->buffer) {
         throw std::runtime_error(format("%s: failed to allocate memory for the model\n", __func__));
     }
 
     for (int i = 0; i < n_tensors; ++i) {
         const char *name = gguf_get_tensor_name(ctx, i);
-        struct ggml_tensor *cur = ggml_get_tensor(model.ctx, name);
+        struct ggml_tensor *cur = ggml_get_tensor(model->ctx, name);
         const size_t offset = gguf_get_data_offset(ctx) + gguf_get_tensor_offset(ctx, i);
         fin.seekg(offset, std::ios::beg);
         if (!fin) {
@@ -248,29 +276,29 @@ phonemizer_model phonemizer_load(const std::string &fname) {
             throw std::runtime_error(format("%s: failed to seek for tensor %s\n", __func__, name));
         }
         int num_bytes = ggml_nbytes(cur);
-        if (ggml_backend_buffer_is_host(model.buffer)) {
+        if (ggml_backend_buffer_is_host(model->buffer)) {
             fin.read(reinterpret_cast<char *>(cur->data), num_bytes);
         }
     }
     fin.close();
 
-    model.hparams.languages = gguf_get_val_str(ctx, gguf_find_key(ctx, "languages"));
-    model.hparams.encoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "encoder_vocab_size"));
-    model.hparams.encoder_symbols = gguf_get_val_str(ctx, gguf_find_key(ctx, "encoder_symbols"));
-    model.hparams.decoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "decoder_vocab_size"));
-    model.hparams.decoder_symbols = gguf_get_val_str(ctx, gguf_find_key(ctx, "decoder_symbols"));
-    model.hparams.char_repeats = gguf_get_val_i32(ctx, gguf_find_key(ctx, "char_repeats"));
-    model.hparams.lowercase = gguf_get_val_bool(ctx, gguf_find_key(ctx, "lowercase"));
-    model.hparams.d_model = gguf_get_val_i32(ctx, gguf_find_key(ctx, "d_model"));
-    model.hparams.layers = gguf_get_val_i32(ctx, gguf_find_key(ctx, "layers"));
-    model.hparams.heads = gguf_get_val_i32(ctx, gguf_find_key(ctx, "heads"));
+    model->hparams.languages = gguf_get_val_str(ctx, gguf_find_key(ctx, "languages"));
+    model->hparams.encoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "encoder_vocab_size"));
+    model->hparams.encoder_symbols = gguf_get_val_str(ctx, gguf_find_key(ctx, "encoder_symbols"));
+    model->hparams.decoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "decoder_vocab_size"));
+    model->hparams.decoder_symbols = gguf_get_val_str(ctx, gguf_find_key(ctx, "decoder_symbols"));
+    model->hparams.char_repeats = gguf_get_val_i32(ctx, gguf_find_key(ctx, "char_repeats"));
+    model->hparams.lowercase = gguf_get_val_bool(ctx, gguf_find_key(ctx, "lowercase"));
+    model->hparams.d_model = gguf_get_val_i32(ctx, gguf_find_key(ctx, "d_model"));
+    model->hparams.layers = gguf_get_val_i32(ctx, gguf_find_key(ctx, "layers"));
+    model->hparams.heads = gguf_get_val_i32(ctx, gguf_find_key(ctx, "heads"));
 
     gguf_free(ctx);
 
     return model;
 }
 
-void phonemizer_free(phonemizer_model *model) {
+void phonemizer_free(struct phonemizer_model * model) {
     if (model->ctx) {
         ggml_free(model->ctx);
         model->ctx = nullptr;
@@ -285,3 +313,15 @@ void phonemizer_free(phonemizer_model *model) {
         model->buffer = nullptr;
     }
 }
+
+//class Phonemizer {
+//    private:
+//        struct phonemizer_model *model;
+//    
+//    public:
+//        Phonemizer(const char *model_path);
+//
+//        ~Phonemizer() {}
+//
+//        std::vector<std::string> operator()(const std::string& text) const;
+//};

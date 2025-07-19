@@ -11,16 +11,16 @@ int main(void)
     ggml_time_init();
 
     // Load model and run forward
-    phonemizer_model model = phonemizer_load("./model/deep_phonemizer.gguf");
+    struct phonemizer_model * model = phonemizer_load("./model/deep_phonemizer.gguf");
     
     // Get the encoder vocabulary size from the model hyperparameters
-    int vocab_size = model.hparams.encoder_vocab_size;
+    int vocab_size = 64;
 
     // Create example tensor with valid indices
     std::vector<int64_t> input_data(vocab_size);
     std::iota(input_data.begin(), input_data.end(), 0);
 
-    struct ggml_tensor *result = compute(&model, input_data);
+    struct ggml_tensor *result = compute(model, input_data);
     printf("Forward computed\n");
 
     // Printing
@@ -34,6 +34,6 @@ int main(void)
     }
     printf("]\n");
 
-    phonemizer_free(&model);
+    phonemizer_free(model);
     return 0;
 }
