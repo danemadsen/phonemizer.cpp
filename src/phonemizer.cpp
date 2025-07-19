@@ -165,7 +165,7 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<in
     return result_copy;  // Return safe copy
 }
 
-struct phonemizer_model load_phonemizer_model(const std::string &fname) {
+struct phonemizer_model phonemizer_load(const std::string &fname) {
     fprintf(stderr, "%s: loading model from '%s'\n", __func__, fname.c_str());
 
     struct phonemizer_model model;
@@ -268,4 +268,20 @@ struct phonemizer_model load_phonemizer_model(const std::string &fname) {
     gguf_free(ctx);
 
     return model;
+}
+
+void phonemizer_free(struct phonemizer_model *model) {
+    if (model->ctx) {
+        ggml_free(model->ctx);
+        model->ctx = nullptr;
+    }
+    if (model->backend) {
+        ggml_backend_free(model->backend);
+        model->backend = nullptr;
+    }
+    model->tensors.clear();
+    if (model->buffer) {
+        ggml_backend_buffer_free(model->buffer);
+        model->buffer = nullptr;
+    }
 }

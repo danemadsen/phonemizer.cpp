@@ -37,6 +37,8 @@ struct phonemizer_model
     ggml_backend_buffer_t buffer;
 };
 
-struct phonemizer_model load_phonemizer_model(const std::string &fname);
+struct phonemizer_model phonemizer_load(const std::string &fname);
+
+void phonemizer_free(struct phonemizer_model *model);
 
 struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<int64_t> &input);
