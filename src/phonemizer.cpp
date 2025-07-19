@@ -313,15 +313,3 @@ void phonemizer_free(struct phonemizer_model * model) {
         model->buffer = nullptr;
     }
 }
-
-//class Phonemizer {
-//    private:
-//        struct phonemizer_model *model;
-//    
-//    public:
-//        Phonemizer(const char *model_path);
-//
-//        ~Phonemizer() {}
-//
-//        std::vector<std::string> operator()(const std::string& text) const;
-//};
