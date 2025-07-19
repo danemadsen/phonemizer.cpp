@@ -54,14 +54,10 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
     struct phonemizer_model_hparams *hp = &model->hparams;
 
     struct ggml_cgraph *gf = ggml_new_graph_custom(ctx, GGML_DEFAULT_GRAPH_SIZE, false);
-    printf("New Graph\n");
-
-    // [T, N] input_tokens is a GGML tensor of type GGML_TYPE_I32 with token indices
 
     // 1. Embedding: [T, N] → [T, N, D]
     struct ggml_tensor *emb_table = model->tensors["embedding.weight"]; // [V, D]
     struct ggml_tensor *x = ggml_get_rows(ctx, emb_table, input_tokens); // [T, N, D]
-    printf("Embedding done\n");
 
     // 2. Positional Encoding
     auto it = model->tensors.find("pos_encoding");
@@ -70,17 +66,13 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
         exit(1);
     }
     struct ggml_tensor *pos_encoding = it->second; // [T, D]
-    printf("x shape: [%ld, %ld, %ld, %ld]\n", x->ne[0], x->ne[1], x->ne[2], x->ne[3]);
-    printf("pos_encoding shape: [%ld, %ld, %ld, %ld]\n", pos_encoding->ne[0], pos_encoding->ne[1], pos_encoding->ne[2], pos_encoding->ne[3]);
     struct ggml_tensor *pe_expanded = ggml_repeat(ctx, pos_encoding, x); // [T, N, D]
     x = ggml_add(ctx, x, pe_expanded); // [T, N, D]
-    printf("Positional Encoding done\n");
 
     // 3. TransformerEncoder layers
     for (int i = 0; i < hp->layers; i++) {
         char prefix[64];
         snprintf(prefix, sizeof(prefix), "encoder.layers.%d", i);
-        printf("=== LAYER %d ===\n", i);
 
         struct ggml_tensor *Wq = model->tensors[std::string(prefix) + ".self_attn.q_proj.weight"];
         struct ggml_tensor *Bq = model->tensors[std::string(prefix) + ".self_attn.q_proj.bias"];
@@ -91,15 +83,12 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
         struct ggml_tensor *Wo = model->tensors[std::string(prefix) + ".self_attn.out_proj.weight"];
         struct ggml_tensor *Bo = model->tensors[std::string(prefix) + ".self_attn.out_proj.bias"];
 
-        printf("Weights loaded for attention\n");
-
         // Optionally normalize first
         x = ggml_rms_norm(ctx, x, 1e-5f);
-        printf("rms_norm done\n");
 
-        struct ggml_tensor *q = ggml_add(ctx, ggml_mul_mat(ctx, Wq, x), Bq); printf("q done\n");
-        struct ggml_tensor *k = ggml_add(ctx, ggml_mul_mat(ctx, Wk, x), Bk); printf("k done\n");
-        struct ggml_tensor *v = ggml_add(ctx, ggml_mul_mat(ctx, Wv, x), Bv); printf("v done\n");
+        struct ggml_tensor *q = ggml_add(ctx, ggml_mul_mat(ctx, Wq, x), Bq);
+        struct ggml_tensor *k = ggml_add(ctx, ggml_mul_mat(ctx, Wk, x), Bk);
+        struct ggml_tensor *v = ggml_add(ctx, ggml_mul_mat(ctx, Wv, x), Bv);
 
         struct ggml_tensor *attn_out = ggml_flash_attn_ext(
             ctx, q, k, v,
@@ -108,37 +97,31 @@ struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_ten
             0.0f,
             -INFINITY
         );
-        printf("flash_attn done\n");
 
         ggml_flash_attn_ext_set_prec(attn_out, GGML_PREC_F32);
-        attn_out = ggml_add(ctx, ggml_mul_mat(ctx, Wo, attn_out), Bo); printf("proj done\n");
-        attn_out = ggml_permute(ctx, attn_out, 0, 2, 1, 3); printf("permute done\n");
-        x = ggml_add(ctx, x, attn_out); printf("residual add done\n");
+        attn_out = ggml_add(ctx, ggml_mul_mat(ctx, Wo, attn_out), Bo);
+        attn_out = ggml_permute(ctx, attn_out, 0, 2, 1, 3);
+        x = ggml_add(ctx, x, attn_out);
 
         struct ggml_tensor *W1 = model->tensors[std::string(prefix) + ".linear1.weight"];
         struct ggml_tensor *B1 = model->tensors[std::string(prefix) + ".linear1.bias"];
         struct ggml_tensor *W2 = model->tensors[std::string(prefix) + ".linear2.weight"];
         struct ggml_tensor *B2 = model->tensors[std::string(prefix) + ".linear2.bias"];
 
-        printf("Weights loaded for feedforward\n");
+        struct ggml_tensor *ff = ggml_add(ctx, ggml_mul_mat(ctx, W1, x), B1);
+        ff = ggml_relu(ctx, ff);
+        ff = ggml_add(ctx, ggml_mul_mat(ctx, W2, ff), B2);
 
-        struct ggml_tensor *ff = ggml_add(ctx, ggml_mul_mat(ctx, W1, x), B1); printf("ff1 done\n");
-        ff = ggml_relu(ctx, ff); printf("relu done\n");
-        ff = ggml_add(ctx, ggml_mul_mat(ctx, W2, ff), B2); printf("ff2 done\n");
-
-        x = ggml_add(ctx, x, ff); printf("residual ff add done\n");
+        x = ggml_add(ctx, x, ff);
     }
-    printf("Transformer layers done\n");
 
     // 4. Final projection to decoder_vocab_size
     struct ggml_tensor *fc_w = model->tensors["fc_out.weight"]; // [V_out, D]
     struct ggml_tensor *fc_b = model->tensors["fc_out.bias"];   // [V_out]
     x = ggml_add(ctx, ggml_mul_mat(ctx, fc_w, x), fc_b);        // [T, N, V_out]
-    printf("Final projection done\n");
 
     // 5. Transpose back to [N, T, V_out] if needed (not always necessary depending on final usage)
     x = ggml_permute(ctx, x, 1, 0, 2, 3); // [T, N, V] → [N, T, V]
-    printf("Transpose done\n");
 
     // Set a known name for the final output tensor
     ggml_set_name(x, "output_tensor");
@@ -176,18 +159,15 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<in
         ggml_free(ctx);
         return nullptr;
     }
-    printf("Graph created successfully\n");
 
     if (ggml_backend_graph_compute(model->backend, gf) != GGML_STATUS_SUCCESS) {
         fprintf(stderr, "ggml_backend_graph_compute() failed\n");
         ggml_free(ctx);
         return nullptr;
     }
-    printf("Graph computation done\n");
 
     // Retrieve the computed tensor (last node in the graph)
     struct ggml_tensor *result = ggml_graph_get_tensor(gf, "output_tensor");
-    printf("Result recieved\n");
 
     // Copy result tensor to a new context to return safely
     struct ggml_context *result_ctx = ggml_init({
@@ -195,7 +175,6 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<in
         nullptr,
         false,
     });
-    printf("Result context initialized\n");
 
     struct ggml_tensor *result_copy = ggml_dup_tensor(result_ctx, result);
     memcpy(result_copy->data, result->data, ggml_nbytes(result));
