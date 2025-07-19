@@ -8,16 +8,23 @@ from dp.preprocessing.text import Preprocessor
 def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor: Preprocessor):
     # List of hyperparameters to add
     hyperparams = [
+        ("languages", str),
         ("encoder_vocab_size", int),
         ("encoder_symbols", str),
         ("decoder_vocab_size", int),
         ("decoder_symbols", str),
+        ("char_repeats", int),
+        ("lowercase", bool),
         ("d_model", int),
         ("layers", int),
         ("heads", int),
     ]
 
     preprocessing = config['preprocessing']
+
+    languages = ''
+    for language in preprocessing['languages']:
+        languages += language + ' '
 
     text_symbols = ''
     for symbol in preprocessing['text_symbols']:
@@ -41,6 +48,12 @@ def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor:
                 value = text_symbols.strip()
             elif param == "decoder_symbols":
                 value = phoneme_symbols.strip()
+            elif param == "languages":
+                value = languages.strip()
+            elif param == "char_repeats":
+                value = preprocessing['char_repeats']
+            elif param == "lowercase":
+                value = preprocessing['lowercase']
             else:
                 value = config['model'][param]
 
@@ -50,6 +63,8 @@ def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor:
                 gguf_writer.add_float32(param, value)
             elif dtype == str:
                 gguf_writer.add_string(param, value)
+            elif dtype == bool:
+                gguf_writer.add_bool(param, value)
             print(f"Added hyperparameter {param} with value {value}")
         except KeyError:
             print(f"Warning: {param} not found in config")
