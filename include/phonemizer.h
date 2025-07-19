@@ -6,10 +6,13 @@
 #include <vector>
 
 struct phonemizer_model_hparams {
+    const char * languages = nullptr;
     int32_t encoder_vocab_size = 1;
     const char * encoder_symbols = nullptr;
     int32_t decoder_vocab_size = 1;
     const char * decoder_symbols = nullptr;
+    int8_t char_repeats = 1;
+    bool lowercase = true;
     int32_t d_model = 512;
     int32_t layers = 4;
     int32_t heads = 1;
@@ -34,6 +37,6 @@ struct phonemizer_model
     ggml_backend_buffer_t buffer;
 };
 
-phonemizer_model load_phonemizer_model(const std::string &fname);
+struct phonemizer_model load_phonemizer_model(const std::string &fname);
 
 struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<int64_t> &input);

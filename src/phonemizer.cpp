@@ -31,24 +31,6 @@ static std::string format(const char *fmt, ...) {
     return std::string(buf.data(), buf.size());
 }
 
-static int get_key_idx(const gguf_context *ctx, const char *key) {
-    int i = gguf_find_key(ctx, key);
-    if (i == -1) {
-        printf("key %s not found in file\n", key);
-    }
-    return i;
-}
-
-static int32_t get_i32(const gguf_context *ctx, const std::string &key) {
-    const int i = get_key_idx(ctx, key.c_str());
-    return gguf_get_val_i32(ctx, i);
-}
-
-static const char * get_str(const gguf_context *ctx, const std::string &key) {
-    const int i = get_key_idx(ctx, key.c_str());
-    return gguf_get_val_str(ctx, i);
-}
-
 struct ggml_cgraph *create_graph(struct phonemizer_model *model, struct ggml_tensor *input_tokens) {
     struct ggml_context *ctx = model->ctx;
     struct phonemizer_model_hparams *hp = &model->hparams;
@@ -183,10 +165,10 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<in
     return result_copy;  // Return safe copy
 }
 
-phonemizer_model load_phonemizer_model(const std::string &fname) {
+struct phonemizer_model load_phonemizer_model(const std::string &fname) {
     fprintf(stderr, "%s: loading model from '%s'\n", __func__, fname.c_str());
 
-    phonemizer_model model;
+    struct phonemizer_model model;
 
     struct ggml_context *meta = NULL;
 
@@ -272,13 +254,16 @@ phonemizer_model load_phonemizer_model(const std::string &fname) {
     }
     fin.close();
 
-    model.hparams.encoder_vocab_size = get_i32(ctx, "encoder_vocab_size");
-    model.hparams.encoder_symbols = get_str(ctx, "encoder_symbols");
-    model.hparams.decoder_vocab_size = get_i32(ctx, "decoder_vocab_size");
-    model.hparams.decoder_symbols = get_str(ctx, "decoder_symbols");
-    model.hparams.d_model = get_i32(ctx, "d_model");
-    model.hparams.layers = get_i32(ctx, "layers");
-    model.hparams.heads = get_i32(ctx, "heads");
+    model.hparams.languages = gguf_get_val_str(ctx, gguf_find_key(ctx, "languages"));
+    model.hparams.encoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "encoder_vocab_size"));
+    model.hparams.encoder_symbols = gguf_get_val_str(ctx, gguf_find_key(ctx, "encoder_symbols"));
+    model.hparams.decoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "decoder_vocab_size"));
+    model.hparams.decoder_symbols = gguf_get_val_str(ctx, gguf_find_key(ctx, "decoder_symbols"));
+    model.hparams.char_repeats = gguf_get_val_i32(ctx, gguf_find_key(ctx, "char_repeats"));
+    model.hparams.lowercase = gguf_get_val_bool(ctx, gguf_find_key(ctx, "lowercase"));
+    model.hparams.d_model = gguf_get_val_i32(ctx, gguf_find_key(ctx, "d_model"));
+    model.hparams.layers = gguf_get_val_i32(ctx, gguf_find_key(ctx, "layers"));
+    model.hparams.heads = gguf_get_val_i32(ctx, gguf_find_key(ctx, "heads"));
 
     gguf_free(ctx);
 
