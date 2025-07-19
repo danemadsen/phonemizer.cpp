@@ -183,8 +183,10 @@ struct ggml_tensor *compute(struct phonemizer_model *model, const std::vector<in
     return result_copy;  // Return safe copy
 }
 
-void load_model(const std::string &fname, phonemizer_model &model) {
+phonemizer_model load_phonemizer_model(const std::string &fname) {
     fprintf(stderr, "%s: loading model from '%s'\n", __func__, fname.c_str());
+
+    phonemizer_model model;
 
     struct ggml_context *meta = NULL;
 
@@ -279,4 +281,6 @@ void load_model(const std::string &fname, phonemizer_model &model) {
     model.hparams.heads = get_i32(ctx, "heads");
 
     gguf_free(ctx);
+
+    return model;
 }

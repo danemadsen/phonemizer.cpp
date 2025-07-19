@@ -11,8 +11,7 @@ int main(void)
     ggml_time_init();
 
     // Load model and run forward
-    phonemizer_model model;
-    load_model("./model/deep_phonemizer.gguf", model);
+    phonemizer_model model = load_phonemizer_model("./model/deep_phonemizer.gguf");
     
     // Get the encoder vocabulary size from the model hyperparameters
     int vocab_size = model.hparams.encoder_vocab_size;
