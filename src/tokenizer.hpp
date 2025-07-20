@@ -12,6 +12,7 @@ class SequenceTokenizer {
         const std::string end_token = "<end>";
 
         std::vector<std::string> tokens;
+        int vocab_length;
         int char_repeats;
         bool lowercase;
         int pad_index;
@@ -22,9 +23,11 @@ class SequenceTokenizer {
         SequenceTokenizer(
             const std::vector<std::string>& symbols, 
             const std::vector<std::string>& languages, 
+            int vocab_length,
             int char_repeats, 
             bool lowercase
-        ) : char_repeats(char_repeats), 
+        ) : vocab_length(vocab_length),
+            char_repeats(char_repeats), 
             lowercase(lowercase)
         {
             tokens.push_back(pad_token);
@@ -68,14 +71,12 @@ class SequenceTokenizer {
             sequence.insert(sequence.begin(), index);
             sequence.push_back(end_index);
 
-            // Pad the sequence to the maximum length (50)
-            int max_length = 50;
-            while (sequence.size() < max_length) {
+            while (sequence.size() < vocab_length) {
                 sequence.push_back(pad_index);
             }
 
-            if (sequence.size() > max_length) {
-                sequence.resize(max_length);
+            if (sequence.size() > vocab_length) {
+                sequence.resize(vocab_length);
             }
 
             return sequence;
