@@ -51,13 +51,12 @@ class SequenceTokenizer {
 
         std::vector<int64_t> operator()(
             const std::string sentence, 
-            int lang_index = 0
+            const std::string language = "en_us"
         ) const {
             std::string processed_sentence = sentence;
             if (lowercase) {
                 std::transform(processed_sentence.begin(), processed_sentence.end(), processed_sentence.begin(), ::tolower);
             }
-            printf("Processing sentence: %s\n", processed_sentence.c_str());
 
             std::vector<int64_t> sequence;
             for (char c : processed_sentence) {
@@ -68,9 +67,8 @@ class SequenceTokenizer {
                     sequence.push_back(index);
                 }
             }
-            printf("Processed sentence to sequence: ");
 
-            auto index = get_token("<" + languages[lang_index] + ">");
+            auto index = get_token("<" + language + ">");
             sequence.insert(sequence.begin(), index);
             sequence.push_back(end_index);
 

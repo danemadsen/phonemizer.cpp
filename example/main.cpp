@@ -15,7 +15,7 @@ int main(void)
 
     printf("Model loaded successfully.\n");
     
-    auto phonemized_text = phonemize("Hello, world!", model);
+    auto phonemized_text = phonemize("Hello world", model);
 
     for (const auto &phoneme : phonemized_text) {
         std::cout << phoneme << " ";

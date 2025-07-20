@@ -290,6 +290,7 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     std::stringstream languages_stream(gguf_get_val_str(ctx, gguf_find_key(ctx, "languages")));
     std::string language_buffer;
     while (languages_stream >> language_buffer) {
+        std::cout << "Adding language: " << language_buffer << std::endl;
         languages.push_back(language_buffer);
     }
 
@@ -334,12 +335,18 @@ std::vector<std::string> phonemize(const std::string text, struct phonemizer_mod
         return {};
     }
 
-    std::vector<int64_t> input_sequence = (*model->encoder)(text, 0);
+    std::vector<int64_t> input_sequence = (*model->encoder)(text);
 
     if (input_sequence.empty()) {
         fprintf(stderr, "%s: input sequence is empty\n", __func__);
         return {};
     }
+    
+    std::cout << "Input sequence: ";
+    for (const auto &token : input_sequence) {
+        std::cout << token << " ";
+    }
+    std::cout << std::endl;
 
     std::vector<int64_t> output_sequence = compute(model, input_sequence);
 
