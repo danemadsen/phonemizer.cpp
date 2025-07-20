@@ -3,11 +3,13 @@
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
 #include "phonemizer.h"
+#include "tokenizer.hpp"
 
 #include <cassert>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <sstream>
 #include <map>
 #include <string>
 #include <vector>
@@ -31,6 +33,9 @@ struct phonemizer_model_hparams {
 
 struct phonemizer_model {
     phonemizer_model_hparams hparams;
+
+    SequenceTokenizer * encoder;
+    SequenceTokenizer * decoder;
 
     ggml_backend_t backend = NULL;
     ggml_backend_buffer_t buffer_w;
@@ -148,7 +153,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
     return gf;
 }
 
-struct ggml_tensor *compute(struct phonemizer_model * model, const std::vector<int64_t> &input) {
+std::vector<int64_t> compute(struct phonemizer_model * model, const std::vector<int64_t> &input) {
     int32_t vocab_size = model->hparams.encoder_vocab_size;
 
     static size_t buf_size = vocab_size * sizeof(int64_t) * 1024 * 1024;
@@ -170,30 +175,23 @@ struct ggml_tensor *compute(struct phonemizer_model * model, const std::vector<i
     if (!gf) {
         fprintf(stderr, "Error during graph creation\n");
         ggml_free(ctx);
-        return nullptr;
+        return {};
     }
 
     if (ggml_backend_graph_compute(model->backend, gf) != GGML_STATUS_SUCCESS) {
         fprintf(stderr, "ggml_backend_graph_compute() failed\n");
         ggml_free(ctx);
-        return nullptr;
+        return {};
     }
 
     // Retrieve the computed tensor (last node in the graph)
     struct ggml_tensor *result = ggml_graph_get_tensor(gf, "output_tensor");
 
-    // Copy result tensor to a new context to return safely
-    struct ggml_context *result_ctx = ggml_init({
-        ggml_tensor_overhead() + ggml_nbytes(result),
-        nullptr,
-        false,
-    });
-
-    struct ggml_tensor *result_copy = ggml_dup_tensor(result_ctx, result);
-    memcpy(result_copy->data, result->data, ggml_nbytes(result));
+    std::vector<int64_t> out_data(ggml_nelements(result));
+    memcpy(out_data.data(), result->data, ggml_nbytes(result));
 
     ggml_free(ctx);  // Free computation context
-    return result_copy;  // Return safe copy
+    return out_data;  // Return safe copy
 }
 
 struct phonemizer_model * phonemizer_load(const char * fname) {
@@ -295,7 +293,65 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
 
     gguf_free(ctx);
 
+    std::vector<std::string> languages;
+    std::stringstream languages_stream(model->hparams.languages);
+    std::string language_buffer;
+    while (languages_stream >> language_buffer) {
+        languages.push_back(language_buffer);
+    }
+
+    std::vector<std::string> text_symbols;
+    std::stringstream text_symbols_stream(model->hparams.encoder_symbols);
+    std::string text_symbol_buffer;
+    while (text_symbols_stream >> text_symbol_buffer) {
+        text_symbols.push_back(text_symbol_buffer);
+    }
+
+    std::vector<std::string> phoneme_symbols;
+    std::stringstream phoneme_symbols_stream(model->hparams.decoder_symbols);
+    std::string phoneme_symbol_buffer;
+    while (phoneme_symbols_stream >> phoneme_symbol_buffer) {
+        phoneme_symbols.push_back(phoneme_symbol_buffer);
+    }
+
+    model->encoder = new SequenceTokenizer(
+        text_symbols, languages,
+        model->hparams.encoder_vocab_size,
+        model->hparams.char_repeats,
+        model->hparams.lowercase
+    );
+
+    model->decoder = new SequenceTokenizer(
+        phoneme_symbols, languages,
+        model->hparams.decoder_vocab_size,
+        1,
+        false
+    );
+
     return model;
+}
+
+std::vector<std::string> phonemize(const char *text, struct phonemizer_model *model) {
+    if (!model || !model->encoder || !model->decoder) {
+        fprintf(stderr, "%s: model or tokenizer not initialized\n", __func__);
+        return {};
+    }
+
+    std::vector<int64_t> input_sequence = (*model->encoder)(text, 0);
+
+    if (input_sequence.empty()) {
+        fprintf(stderr, "%s: input sequence is empty\n", __func__);
+        return {};
+    }
+
+    std::vector<int64_t> output_sequence = compute(model, input_sequence);
+
+    if (output_sequence.empty()) {
+        fprintf(stderr, "%s: compute failed\n", __func__);
+        return {};
+    }
+
+    return model->decoder->decode(output_sequence);
 }
 
 void phonemizer_free(struct phonemizer_model * model) {
@@ -312,16 +368,12 @@ void phonemizer_free(struct phonemizer_model * model) {
         ggml_backend_buffer_free(model->buffer);
         model->buffer = nullptr;
     }
+    if (model->encoder) {
+        delete model->encoder;
+        model->encoder = nullptr;
+    }
+    if (model->decoder) {
+        delete model->decoder;
+        model->decoder = nullptr;
+    }
 }
-
-//class Phonemizer {
-//    private:
-//        struct phonemizer_model *model;
-//    
-//    public:
-//        Phonemizer(const char *model_path);
-//
-//        ~Phonemizer() {}
-//
-//        std::vector<std::string> operator()(const std::string& text) const;
-//};

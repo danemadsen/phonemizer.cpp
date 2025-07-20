@@ -11,7 +11,7 @@ void phonemizer_free(struct phonemizer_model * model);
 #include <string>
 #include <vector>
 
-struct ggml_tensor *compute(struct phonemizer_model * model, const std::vector<int64_t> &input);
+std::vector<std::string> phonemize(const char *text, struct phonemizer_model *model);
 
 class Phonemizer {
     private:

@@ -12,6 +12,7 @@ class SequenceTokenizer {
         const std::string end_token = "<end>";
 
         std::vector<std::string> tokens;
+        std::vector<std::string> languages;
         int vocab_length;
         int char_repeats;
         bool lowercase;
@@ -26,7 +27,8 @@ class SequenceTokenizer {
             int vocab_length,
             int char_repeats, 
             bool lowercase
-        ) : vocab_length(vocab_length),
+        ) : languages(languages),
+            vocab_length(vocab_length),
             char_repeats(char_repeats), 
             lowercase(lowercase)
         {
@@ -49,7 +51,7 @@ class SequenceTokenizer {
 
         std::vector<int64_t> operator()(
             const std::string& sentence, 
-            const std::string& language
+            int lang_index = 0
         ) const {
             std::string processed_sentence = sentence;
             if (lowercase) {
@@ -67,7 +69,7 @@ class SequenceTokenizer {
                 }
             }
 
-            auto index = get_token("<" + language + ">");
+            auto index = get_token("<" + languages[lang_index] + ">");
             sequence.insert(sequence.begin(), index);
             sequence.push_back(end_index);
 

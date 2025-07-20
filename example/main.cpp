@@ -12,27 +12,15 @@ int main(void)
 
     // Load model and run forward
     struct phonemizer_model * model = phonemizer_load("./model/deep_phonemizer.gguf");
+
+    printf("Model loaded successfully.\n");
     
-    // Get the encoder vocabulary size from the model hyperparameters
-    int vocab_size = 64;
+    auto phonemized_text = phonemize("Hello, world!", model);
 
-    // Create example tensor with valid indices
-    std::vector<int64_t> input_data(vocab_size);
-    std::iota(input_data.begin(), input_data.end(), 0);
-
-    struct ggml_tensor *result = compute(model, input_data);
-    printf("Forward computed\n");
-
-    // Printing
-    std::vector<int64_t> out_data(ggml_nelements(result));
-    memcpy(out_data.data(), result->data, ggml_nbytes(result));
-
-    printf("Result: [");
-    for (int i = 0; i < result->ne[0]; i++)
-    {
-        printf("%ld, ", out_data[i]);
+    for (const auto &phoneme : phonemized_text) {
+        std::cout << phoneme << " ";
     }
-    printf("]\n");
+    std::cout << std::endl;
 
     phonemizer_free(model);
     return 0;
