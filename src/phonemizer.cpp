@@ -185,11 +185,24 @@ std::vector<int64_t> compute(struct phonemizer_model * model, const std::vector<
     // Retrieve the computed tensor (last node in the graph)
     struct ggml_tensor *result = ggml_graph_get_tensor(gf, "output_tensor");
 
-    std::vector<int64_t> out_data(ggml_nelements(result));
+    std::vector<float> out_data(ggml_nelements(result));
     memcpy(out_data.data(), result->data, ggml_nbytes(result));
 
-    ggml_free(ctx);  // Free computation context
-    return out_data;  // Return safe copy
+    std::vector<int64_t> output_tokens;
+    for (size_t t = 0; t < input.size(); ++t) {
+        const float* row = out_data.data() + t * model->hparams.decoder_vocab_size;
+
+        int64_t max_index = 0;
+        float max_val = row[0];
+        for (int i = 1; i < model->hparams.decoder_vocab_size; ++i) {
+            if (row[i] > max_val) {
+                max_val = row[i];
+                max_index = i;
+            }
+        }
+        output_tokens.push_back(max_index);
+    }
+    return output_tokens;
 }
 
 struct phonemizer_model * phonemizer_load(const char * fname) {
@@ -354,6 +367,12 @@ std::vector<std::string> phonemize(const std::string text, struct phonemizer_mod
         fprintf(stderr, "%s: compute failed\n", __func__);
         return {};
     }
+
+    std::cout << "Output sequence: ";
+    for (const auto &token : output_sequence) {
+        std::cout << token << " ";
+    }
+    std::cout << std::endl;
 
     return model->decoder->decode(output_sequence);
 }
