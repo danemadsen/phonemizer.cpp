@@ -17,13 +17,11 @@
 #include <inttypes.h>
 #include <cstdarg>
 #include <cmath>
+#include <iostream>
 
 struct phonemizer_model_hparams {
-    const char * languages = nullptr;
     int32_t encoder_vocab_size = 1;
-    const char * encoder_symbols = nullptr;
     int32_t decoder_vocab_size = 1;
-    const char * decoder_symbols = nullptr;
     int8_t char_repeats = 1;
     bool lowercase = true;
     int32_t d_model = 512;
@@ -280,37 +278,34 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     }
     fin.close();
 
-    model->hparams.languages = gguf_get_val_str(ctx, gguf_find_key(ctx, "languages"));
     model->hparams.encoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "encoder_vocab_size"));
-    model->hparams.encoder_symbols = gguf_get_val_str(ctx, gguf_find_key(ctx, "encoder_symbols"));
     model->hparams.decoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "decoder_vocab_size"));
-    model->hparams.decoder_symbols = gguf_get_val_str(ctx, gguf_find_key(ctx, "decoder_symbols"));
     model->hparams.char_repeats = gguf_get_val_i32(ctx, gguf_find_key(ctx, "char_repeats"));
     model->hparams.lowercase = gguf_get_val_bool(ctx, gguf_find_key(ctx, "lowercase"));
     model->hparams.d_model = gguf_get_val_i32(ctx, gguf_find_key(ctx, "d_model"));
     model->hparams.layers = gguf_get_val_i32(ctx, gguf_find_key(ctx, "layers"));
     model->hparams.heads = gguf_get_val_i32(ctx, gguf_find_key(ctx, "heads"));
 
-    gguf_free(ctx);
-
     std::vector<std::string> languages;
-    std::stringstream languages_stream(model->hparams.languages);
+    std::stringstream languages_stream(gguf_get_val_str(ctx, gguf_find_key(ctx, "languages")));
     std::string language_buffer;
     while (languages_stream >> language_buffer) {
         languages.push_back(language_buffer);
     }
 
     std::vector<std::string> text_symbols;
-    std::stringstream text_symbols_stream(model->hparams.encoder_symbols);
+    std::stringstream text_symbols_stream(gguf_get_val_str(ctx, gguf_find_key(ctx, "encoder_symbols")));
     std::string text_symbol_buffer;
     while (text_symbols_stream >> text_symbol_buffer) {
+        std::cout << "Adding text symbol: " << text_symbol_buffer << std::endl;
         text_symbols.push_back(text_symbol_buffer);
     }
 
     std::vector<std::string> phoneme_symbols;
-    std::stringstream phoneme_symbols_stream(model->hparams.decoder_symbols);
+    std::stringstream phoneme_symbols_stream(gguf_get_val_str(ctx, gguf_find_key(ctx, "decoder_symbols")));
     std::string phoneme_symbol_buffer;
     while (phoneme_symbols_stream >> phoneme_symbol_buffer) {
+        std::cout << "Adding phoneme symbol: " << phoneme_symbol_buffer << std::endl;
         phoneme_symbols.push_back(phoneme_symbol_buffer);
     }
 
@@ -328,10 +323,12 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
         false
     );
 
+    gguf_free(ctx);
+
     return model;
 }
 
-std::vector<std::string> phonemize(const char *text, struct phonemizer_model *model) {
+std::vector<std::string> phonemize(const std::string text, struct phonemizer_model *model) {
     if (!model || !model->encoder || !model->decoder) {
         fprintf(stderr, "%s: model or tokenizer not initialized\n", __func__);
         return {};

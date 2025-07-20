@@ -22,8 +22,8 @@ class SequenceTokenizer {
 
     public:
         SequenceTokenizer(
-            const std::vector<std::string>& symbols, 
-            const std::vector<std::string>& languages, 
+            const std::vector<std::string> symbols, 
+            const std::vector<std::string> languages, 
             int vocab_length,
             int char_repeats, 
             bool lowercase
@@ -50,24 +50,25 @@ class SequenceTokenizer {
         }
 
         std::vector<int64_t> operator()(
-            const std::string& sentence, 
+            const std::string sentence, 
             int lang_index = 0
         ) const {
             std::string processed_sentence = sentence;
             if (lowercase) {
                 std::transform(processed_sentence.begin(), processed_sentence.end(), processed_sentence.begin(), ::tolower);
             }
+            printf("Processing sentence: %s\n", processed_sentence.c_str());
 
             std::vector<int64_t> sequence;
             for (char c : processed_sentence) {
                 std::string symbol(1, c);
                 auto index = get_token(symbol);
-                if (index != -1) {
-                    for (int i = 0; i < char_repeats; ++i) {
-                        sequence.push_back(index);
-                    }
+                if (index == -1) continue; // skip unknown symbols
+                for (int i = 0; i < char_repeats; ++i) {
+                    sequence.push_back(index);
                 }
             }
+            printf("Processed sentence to sequence: ");
 
             auto index = get_token("<" + languages[lang_index] + ">");
             sequence.insert(sequence.begin(), index);

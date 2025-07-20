@@ -11,7 +11,7 @@ void phonemizer_free(struct phonemizer_model * model);
 #include <string>
 #include <vector>
 
-std::vector<std::string> phonemize(const char *text, struct phonemizer_model *model);
+std::vector<std::string> phonemize(const std::string text, struct phonemizer_model *model);
 
 class Phonemizer {
     private:
