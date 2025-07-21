@@ -152,33 +152,21 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
 }
 
 std::vector<int64_t> compute(struct phonemizer_model * model, const std::vector<int64_t> &input) {
-    int32_t vocab_size = model->hparams.encoder_vocab_size;
-
-    static size_t buf_size = vocab_size * sizeof(int64_t) * 1024 * 1024;
-    static void *buf = malloc(buf_size);
-    struct ggml_init_params params = {
-        buf_size,
-        buf,
-        false,
-    };
-    struct ggml_context *ctx = ggml_init(params);
-
-    struct ggml_tensor *input_tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, input.size());
-    for (size_t i = 0; i < input.size(); ++i) {
-        ((int32_t *)input_tensor->data)[i] = input[i];
-    }
+    struct ggml_tensor *input_tensor = ggml_new_tensor_1d(model->ctx, GGML_TYPE_I32, input.size());
     ggml_set_name(input_tensor, "input_tensor");
 
     struct ggml_cgraph *gf = create_graph(model, input_tensor);
     if (!gf) {
         fprintf(stderr, "Error during graph creation\n");
-        ggml_free(ctx);
         return {};
+    }
+
+    for (size_t i = 0; i < input.size(); ++i) {
+        ((int32_t *)input_tensor->data)[i] = input[i];
     }
 
     if (ggml_backend_graph_compute(model->backend, gf) != GGML_STATUS_SUCCESS) {
         fprintf(stderr, "ggml_backend_graph_compute() failed\n");
-        ggml_free(ctx);
         return {};
     }
 
@@ -217,22 +205,22 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
         &meta,
     };
 
-    struct gguf_context *ctx = gguf_init_from_file(fname, gguf_params);
+    struct gguf_context *gguf = gguf_init_from_file(fname, gguf_params);
 
-    if (!ctx) {
+    if (!gguf) {
         throw std::runtime_error(format("%s: failed to open '%s'\n", __func__, fname));
     }
 
-    const int n_tensors = gguf_get_n_tensors(ctx);
-    const int n_kv = gguf_get_n_kv(ctx);
+    const int n_tensors = gguf_get_n_tensors(gguf);
+    const int n_kv = gguf_get_n_kv(gguf);
     printf("%s: loaded meta data with %d key-value pairs and %d tensors from %s\n", __func__, n_kv, n_tensors, fname);
 
     size_t model_size = 0;
 
     for (int i = 0; i < n_tensors; ++i) {
-        const char *name = gguf_get_tensor_name(ctx, i);
-        const size_t offset = gguf_get_tensor_offset(ctx, i);
-        enum ggml_type type = gguf_get_tensor_type(ctx, i);
+        const char *name = gguf_get_tensor_name(gguf, i);
+        const size_t offset = gguf_get_tensor_offset(gguf, i);
+        enum ggml_type type = gguf_get_tensor_type(gguf, i);
         struct ggml_tensor *cur = ggml_get_tensor(meta, name);
         size_t tensor_size = ggml_nbytes(cur);
         model_size += tensor_size;
@@ -258,7 +246,7 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     }
 
     for (int i = 0; i < n_tensors; ++i) {
-        const char *name = gguf_get_tensor_name(ctx, i);
+        const char *name = gguf_get_tensor_name(gguf, i);
         struct ggml_tensor *cur = ggml_dup_tensor(model->ctx, ggml_get_tensor(meta, name));
         ggml_set_name(cur, name);
         model->tensors[name] = cur;
@@ -276,12 +264,12 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     }
 
     for (int i = 0; i < n_tensors; ++i) {
-        const char *name = gguf_get_tensor_name(ctx, i);
+        const char *name = gguf_get_tensor_name(gguf, i);
         struct ggml_tensor *cur = ggml_get_tensor(model->ctx, name);
-        const size_t offset = gguf_get_data_offset(ctx) + gguf_get_tensor_offset(ctx, i);
+        const size_t offset = gguf_get_data_offset(gguf) + gguf_get_tensor_offset(gguf, i);
         fin.seekg(offset, std::ios::beg);
         if (!fin) {
-            gguf_free(ctx);
+            gguf_free(gguf);
             throw std::runtime_error(format("%s: failed to seek for tensor %s\n", __func__, name));
         }
         int num_bytes = ggml_nbytes(cur);
@@ -291,16 +279,16 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     }
     fin.close();
 
-    model->hparams.encoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "encoder_vocab_size"));
-    model->hparams.decoder_vocab_size = gguf_get_val_i32(ctx, gguf_find_key(ctx, "decoder_vocab_size"));
-    model->hparams.char_repeats = gguf_get_val_i32(ctx, gguf_find_key(ctx, "char_repeats"));
-    model->hparams.lowercase = gguf_get_val_bool(ctx, gguf_find_key(ctx, "lowercase"));
-    model->hparams.d_model = gguf_get_val_i32(ctx, gguf_find_key(ctx, "d_model"));
-    model->hparams.layers = gguf_get_val_i32(ctx, gguf_find_key(ctx, "layers"));
-    model->hparams.heads = gguf_get_val_i32(ctx, gguf_find_key(ctx, "heads"));
+    model->hparams.encoder_vocab_size = gguf_get_val_i32(gguf, gguf_find_key(gguf, "encoder_vocab_size"));
+    model->hparams.decoder_vocab_size = gguf_get_val_i32(gguf, gguf_find_key(gguf, "decoder_vocab_size"));
+    model->hparams.char_repeats = gguf_get_val_i32(gguf, gguf_find_key(gguf, "char_repeats"));
+    model->hparams.lowercase = gguf_get_val_bool(gguf, gguf_find_key(gguf, "lowercase"));
+    model->hparams.d_model = gguf_get_val_i32(gguf, gguf_find_key(gguf, "d_model"));
+    model->hparams.layers = gguf_get_val_i32(gguf, gguf_find_key(gguf, "layers"));
+    model->hparams.heads = gguf_get_val_i32(gguf, gguf_find_key(gguf, "heads"));
 
     std::vector<std::string> languages;
-    std::stringstream languages_stream(gguf_get_val_str(ctx, gguf_find_key(ctx, "languages")));
+    std::stringstream languages_stream(gguf_get_val_str(gguf, gguf_find_key(gguf, "languages")));
     std::string language_buffer;
     while (languages_stream >> language_buffer) {
         std::cout << "Adding language: " << language_buffer << std::endl;
@@ -308,7 +296,7 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     }
 
     std::vector<std::string> text_symbols;
-    std::stringstream text_symbols_stream(gguf_get_val_str(ctx, gguf_find_key(ctx, "encoder_symbols")));
+    std::stringstream text_symbols_stream(gguf_get_val_str(gguf, gguf_find_key(gguf, "encoder_symbols")));
     std::string text_symbol_buffer;
     while (text_symbols_stream >> text_symbol_buffer) {
         std::cout << "Adding text symbol: " << text_symbol_buffer << std::endl;
@@ -316,7 +304,7 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     }
 
     std::vector<std::string> phoneme_symbols;
-    std::stringstream phoneme_symbols_stream(gguf_get_val_str(ctx, gguf_find_key(ctx, "decoder_symbols")));
+    std::stringstream phoneme_symbols_stream(gguf_get_val_str(gguf, gguf_find_key(gguf, "decoder_symbols")));
     std::string phoneme_symbol_buffer;
     while (phoneme_symbols_stream >> phoneme_symbol_buffer) {
         std::cout << "Adding phoneme symbol: " << phoneme_symbol_buffer << std::endl;
@@ -337,7 +325,7 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
         false
     );
 
-    gguf_free(ctx);
+    gguf_free(gguf);
 
     return model;
 }
