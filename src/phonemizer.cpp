@@ -69,7 +69,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
     struct ggml_context *ctx = model->ctx;
     phonemizer_model_hparams *hp = &model->hparams;
 
-    struct ggml_cgraph *gf = ggml_new_graph_custom(ctx, GGML_DEFAULT_GRAPH_SIZE, false);
+    struct ggml_cgraph *gf = ggml_new_graph(ctx);
 
     // 1. Embedding: [T, N] → [T, N, D]
     struct ggml_tensor *emb_table = model->tensors["embedding.weight"]; // [V, D]
