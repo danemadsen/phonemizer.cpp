@@ -9,15 +9,15 @@
 class SequenceTokenizer {
     private:
         const std::string pad_token = " ";
+        const int pad_index= 0;
         const std::string end_token = "<end>";
+        int end_index;
 
         std::vector<std::string> tokens;
         std::vector<std::string> languages;
         int vocab_length;
         int char_repeats;
         bool lowercase;
-        int pad_index;
-        int end_index;
         std::unordered_set<std::string> special_tokens;
 
     public:
