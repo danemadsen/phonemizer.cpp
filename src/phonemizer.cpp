@@ -99,8 +99,10 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
         struct ggml_tensor *Wo = model->tensors[std::string(prefix) + ".self_attn.out_proj.weight"];
         struct ggml_tensor *Bo = model->tensors[std::string(prefix) + ".self_attn.out_proj.bias"];
 
-        // Optionally normalize first
-        x = ggml_rms_norm(ctx, x, 1e-5f);
+        struct ggml_tensor *rms = ggml_rms_norm(ctx, x, 1e-5f);
+        struct ggml_tensor *weight = model->tensors[std::string(prefix) + ".norm1.weight"];
+        weight = ggml_repeat(ctx, weight, rms);  // match [T, N, D]
+        x = ggml_mul(ctx, rms, weight);
 
         struct ggml_tensor *q = ggml_add(ctx, ggml_mul_mat(ctx, Wq, x), Bq); 
         struct ggml_tensor *k = ggml_add(ctx, ggml_mul_mat(ctx, Wk, x), Bk); 
@@ -123,6 +125,11 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
         struct ggml_tensor *B1 = model->tensors[std::string(prefix) + ".linear1.bias"];
         struct ggml_tensor *W2 = model->tensors[std::string(prefix) + ".linear2.weight"];
         struct ggml_tensor *B2 = model->tensors[std::string(prefix) + ".linear2.bias"];
+
+        rms = ggml_rms_norm(ctx, x, 1e-5f);
+        weight = model->tensors[std::string(prefix) + ".norm2.weight"];
+        weight = ggml_repeat(ctx, weight, rms);  // match [T, N, D]
+        x = ggml_mul(ctx, rms, weight);
 
         struct ggml_tensor *ff = ggml_add(ctx, ggml_mul_mat(ctx, W1, x), B1);
         ff = ggml_relu(ctx, ff);
