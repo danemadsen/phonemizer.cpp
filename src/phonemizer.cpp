@@ -102,16 +102,16 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
         // Optionally normalize first
         x = ggml_rms_norm(ctx, x, 1e-5f);
 
-        struct ggml_tensor *q = ggml_add(ctx, ggml_mul_mat(ctx, Wq, x), Bq);
-        struct ggml_tensor *k = ggml_add(ctx, ggml_mul_mat(ctx, Wk, x), Bk);
-        struct ggml_tensor *v = ggml_add(ctx, ggml_mul_mat(ctx, Wv, x), Bv);
+        struct ggml_tensor *q = ggml_add(ctx, ggml_mul_mat(ctx, Wq, x), Bq); 
+        struct ggml_tensor *k = ggml_add(ctx, ggml_mul_mat(ctx, Wk, x), Bk); 
+        struct ggml_tensor *v = ggml_add(ctx, ggml_mul_mat(ctx, Wv, x), Bv); 
 
         struct ggml_tensor *attn_out = ggml_flash_attn_ext(
             ctx, q, k, v,
-            NULL,
-            1.0f / sqrtf((float)(hp->d_model / hp->heads)),
-            0.0f,
-            -INFINITY
+            nullptr,
+            1.0f / sqrtf((float)(hp->d_model / hp->heads)),  // scale
+            0.0f,  // max_bias
+            10.0f   // logit_softcap
         );
 
         ggml_flash_attn_ext_set_prec(attn_out, GGML_PREC_F32);
@@ -291,7 +291,6 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     std::stringstream languages_stream(gguf_get_val_str(gguf, gguf_find_key(gguf, "languages")));
     std::string language_buffer;
     while (languages_stream >> language_buffer) {
-        std::cout << "Adding language: " << language_buffer << std::endl;
         languages.push_back(language_buffer);
     }
 
@@ -299,7 +298,6 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     std::stringstream text_symbols_stream(gguf_get_val_str(gguf, gguf_find_key(gguf, "encoder_symbols")));
     std::string text_symbol_buffer;
     while (text_symbols_stream >> text_symbol_buffer) {
-        std::cout << "Adding text symbol: " << text_symbol_buffer << std::endl;
         text_symbols.push_back(text_symbol_buffer);
     }
 
@@ -307,14 +305,13 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     std::stringstream phoneme_symbols_stream(gguf_get_val_str(gguf, gguf_find_key(gguf, "decoder_symbols")));
     std::string phoneme_symbol_buffer;
     while (phoneme_symbols_stream >> phoneme_symbol_buffer) {
-        std::cout << "Adding phoneme symbol: " << phoneme_symbol_buffer << std::endl;
         phoneme_symbols.push_back(phoneme_symbol_buffer);
     }
 
     model->encoder = new SequenceTokenizer(
         text_symbols, languages,
         model->hparams.encoder_vocab_size,
-        model->hparams.char_repeats,
+        1,
         model->hparams.lowercase
     );
 
