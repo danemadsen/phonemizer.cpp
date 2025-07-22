@@ -318,7 +318,7 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     model->decoder = new SequenceTokenizer(
         phoneme_symbols, languages,
         model->hparams.decoder_vocab_size,
-        model->hparams.char_repeats,
+        1,
         false
     );
 
