@@ -111,7 +111,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
             nullptr,
             1.0f / sqrtf((float)(hp->d_model / hp->heads)),  // scale
             0.0f,  // max_bias
-            10.0f   // logit_softcap
+            1.0f   // logit_softcap
         );
 
         ggml_flash_attn_ext_set_prec(attn_out, GGML_PREC_F32);
@@ -311,14 +311,14 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     model->encoder = new SequenceTokenizer(
         text_symbols, languages,
         model->hparams.encoder_vocab_size,
-        1,
+        model->hparams.char_repeats,
         model->hparams.lowercase
     );
 
     model->decoder = new SequenceTokenizer(
         phoneme_symbols, languages,
         model->hparams.decoder_vocab_size,
-        1,
+        model->hparams.char_repeats,
         false
     );
 
