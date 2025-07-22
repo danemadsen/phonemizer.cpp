@@ -2,10 +2,10 @@ import torch
 import numpy as np
 from gguf import GGUFWriter
 from typing import Dict, Any
-from dp.model.model import load_checkpoint
+from dp.model.model import Model, load_checkpoint
 from dp.preprocessing.text import Preprocessor
 
-def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor: Preprocessor):
+def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, model: Model):
     # List of hyperparameters to add
     hyperparams = [
         ("languages", str),
@@ -41,9 +41,9 @@ def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, preprocessor:
     for param, dtype in hyperparams:
         try:
             if param == "encoder_vocab_size":
-                value = preprocessor.text_tokenizer.vocab_size
+                value = model.embedding.num_embeddings
             elif param == "decoder_vocab_size":
-                value = preprocessor.phoneme_tokenizer.vocab_size
+                value = model.fc_out.out_features
             elif param == "encoder_symbols":
                 value = text_symbols.strip()
             elif param == "decoder_symbols":
@@ -120,12 +120,10 @@ if __name__ == "__main__":
 
     print(f"Config: {config}")
 
-    preprocessor = Preprocessor.from_config(config)
-
     gguf_writer = GGUFWriter(output_gguf_path, "model_name")
 
     # Insert hyperparameters
-    parse_hparams(config, gguf_writer, preprocessor)
+    parse_hparams(config, gguf_writer, model)
 
     # Insert weights
     parse_model(model, gguf_writer)
