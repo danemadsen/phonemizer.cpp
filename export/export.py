@@ -34,7 +34,6 @@ def parse_hparams(config: Dict[str, Any], gguf_writer: GGUFWriter, model: Model)
     phoneme_symbols = ''
     for symbol in preprocessing['phoneme_symbols']:
         phoneme_symbols += symbol + ' '
-    phoneme_symbols += '. , : ; ? ! \" ( ) -'
     print(f"Phoneme symbols: {phoneme_symbols}")
 
     # Add each hyperparameter if it exists in the config
