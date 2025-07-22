@@ -50,21 +50,6 @@ struct phonemizer_model {
     ggml_backend_buffer_t buffer;
 };
 
-static std::string format(const char *fmt, ...) {
-    va_list ap;
-    va_list ap2;
-    va_start(ap, fmt);
-    va_copy(ap2, ap);
-    int size = vsnprintf(NULL, 0, fmt, ap);
-    GGML_ASSERT(size >= 0 && size < INT_MAX);
-    std::vector<char> buf(size + 1);
-    int size2 = vsnprintf(buf.data(), size + 1, fmt, ap2);
-    GGML_ASSERT(size2 == size);
-    va_end(ap2);
-    va_end(ap);
-    return std::string(buf.data(), buf.size());
-}
-
 struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_tensor *input_tokens) {
     struct ggml_context *ctx = model->ctx;
     phonemizer_model_hparams *hp = &model->hparams;
@@ -215,7 +200,7 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     struct gguf_context *gguf = gguf_init_from_file(fname, gguf_params);
 
     if (!gguf) {
-        throw std::runtime_error(format("%s: failed to open '%s'\n", __func__, fname));
+        throw std::runtime_error("Failed to initialize GGUF context from file: " + std::string(fname));
     }
 
     const int n_tensors = gguf_get_n_tensors(gguf);
@@ -237,7 +222,9 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
 
     model->backend = ggml_backend_init_by_type(GGML_BACKEND_DEVICE_TYPE_CPU, nullptr);
     if (!model->backend) {
-        throw std::runtime_error(format("%s: ggml_backend_cpu_init() failed\n", __func__));
+        throw std::runtime_error(
+            "Failed to initialize backend for phonemizer model. Ensure the backend is correctly set up."
+        );
     }
 
     struct ggml_init_params ggml_params = {
@@ -249,7 +236,9 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
     model->ctx = ggml_init(ggml_params);
 
     if (!model->ctx) {
-        throw std::runtime_error(format("%s: ggml_init() failed\n", __func__));
+        throw std::runtime_error(
+            "Failed to initialize ggml context for phonemizer model. Ensure the context is correctly set up."
+        );
     }
 
     for (int i = 0; i < n_tensors; ++i) {
@@ -267,7 +256,9 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
 
     model->buffer = ggml_backend_alloc_ctx_tensors(model->ctx, model->backend);
     if (!model->buffer) {
-        throw std::runtime_error(format("%s: failed to allocate memory for the model\n", __func__));
+        throw std::runtime_error(
+            "Failed to allocate backend buffer for phonemizer model. Ensure the backend is correctly set up."
+        );
     }
 
     for (int i = 0; i < n_tensors; ++i) {
@@ -277,7 +268,9 @@ struct phonemizer_model * phonemizer_load(const char * fname) {
         fin.seekg(offset, std::ios::beg);
         if (!fin) {
             gguf_free(gguf);
-            throw std::runtime_error(format("%s: failed to seek for tensor %s\n", __func__, name));
+            throw std::runtime_error(
+                "Failed to seek to tensor data offset in phonemizer model file: " + std::string(fname)
+            );
         }
         int num_bytes = ggml_nbytes(cur);
         if (ggml_backend_buffer_is_host(model->buffer)) {
