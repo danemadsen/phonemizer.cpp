@@ -43,6 +43,36 @@ struct phonemizer_model {
     std::map<std::string, struct ggml_tensor *> tensors;
 };
 
+struct ggml_tensor *create_mask(ggml_context *ctx, struct ggml_tensor *input_tokens) {
+    struct ggml_tensor *zero = ggml_new_tensor_2d(
+        ctx, 
+        GGML_TYPE_I32, 
+        input_tokens->ne[0], 
+        input_tokens->ne[1]
+    );
+    zero->data = malloc(ggml_nbytes(zero));
+    ggml_set_zero(zero);
+
+    struct ggml_tensor *mask = ggml_map_custom2(
+        ctx, 
+        input_tokens, 
+        zero, 
+        [](struct ggml_tensor *dst, const struct ggml_tensor *a, const struct ggml_tensor *b, int ith, int nth, void *userdata) {
+            int64_t ne = ggml_nelements(a);
+            const int32_t *pa = (const int32_t *)a->data;
+            const int32_t *pb = (const int32_t *)b->data;
+            int32_t *pd = (int32_t *)dst->data;
+            for (int64_t i = ith; i < ne; i += nth) {
+                pd[i] = (pa[i] == pb[i]) ? 1 : 0;
+            }
+        },
+        GGML_N_TASKS_MAX,
+        NULL
+    );
+
+    return ggml_permute(ctx, mask, 1, 0, 2, 3);
+}
+
 struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_tensor *input_tokens) {
     struct ggml_context *ctx = model->ctx;
     phonemizer_model_hparams *hp = &model->hparams;
@@ -86,9 +116,11 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
         struct ggml_tensor *k = ggml_add(ctx, ggml_mul_mat(ctx, Wk, x), Bk); 
         struct ggml_tensor *v = ggml_add(ctx, ggml_mul_mat(ctx, Wv, x), Bv); 
 
+        struct ggml_tensor * mask = create_mask(ctx, x); // [N, T, 1]
+
         struct ggml_tensor *attn_out = ggml_flash_attn_ext(
             ctx, q, k, v,
-            nullptr,
+            mask,
             1.0f / sqrtf((float)(hp->d_model / hp->heads)),  // scale
             0.0f,  // max_bias
             1.0f   // logit_softcap
