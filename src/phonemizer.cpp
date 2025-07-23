@@ -30,24 +30,17 @@ struct phonemizer_model_hparams {
 };
 
 struct phonemizer_model {
-    phonemizer_model_hparams hparams;
+    struct ggml_context *ctx;
+
+    struct phonemizer_model_hparams hparams;
 
     SequenceTokenizer * encoder;
     SequenceTokenizer * decoder;
 
     ggml_backend_t backend = NULL;
-    ggml_backend_buffer_t buffer_w;
-
-    // weights
-    struct ggml_tensor *weights;
-    struct ggml_tensor *bias;
-
-    // the context to define the tensor information (dimensions, size, memory data)
-    struct ggml_context *ctx;
+    ggml_backend_buffer_t buffer;
 
     std::map<std::string, struct ggml_tensor *> tensors;
-
-    ggml_backend_buffer_t buffer;
 };
 
 struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_tensor *input_tokens) {
