@@ -51,7 +51,7 @@ struct ggml_tensor *create_mask(ggml_context *ctx, struct ggml_tensor *input_tok
         input_tokens->ne[1]
     );
     zero->data = malloc(ggml_nbytes(zero));
-    ggml_set_zero(zero);
+    memset(zero->data, 0, ggml_nbytes(zero)); // manually zero
 
     struct ggml_tensor *mask = ggml_map_custom2(
         ctx, 
@@ -70,7 +70,8 @@ struct ggml_tensor *create_mask(ggml_context *ctx, struct ggml_tensor *input_tok
         NULL
     );
 
-    return ggml_permute(ctx, mask, 1, 0, 2, 3);
+    mask = ggml_permute(ctx, mask, 1, 0, 2, 3); // [T,N] -> [N,T,1,1]
+    return ggml_cont(ctx, mask); // <---- critical fix
 }
 
 struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_tensor *input_tokens) {
@@ -122,7 +123,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
             ctx, q, k, v,
             mask,
             1.0f / sqrtf((float)(hp->d_model / hp->heads)),  // scale
-            0.0f,  // max_bias
+            0.1f,  // max_bias
             1.0f   // logit_softcap
         );
 
