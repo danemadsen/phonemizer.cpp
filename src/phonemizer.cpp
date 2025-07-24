@@ -63,7 +63,7 @@ struct ggml_tensor *create_mask(ggml_context *ctx, struct ggml_tensor *input_tok
             const int32_t *pb = (const int32_t *)b->data;
             int32_t *pd = (int32_t *)dst->data;
             for (int64_t i = ith; i < ne; i += nth) {
-                pd[i] = (pa[i] == pb[i]) ? 1 : 0;
+                pd[i] = (pa[i] == 0) ? 1 : 0;
             }
         },
         GGML_N_TASKS_MAX,
@@ -79,6 +79,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
     phonemizer_model_hparams *hp = &model->hparams;
 
     struct ggml_cgraph *gf = ggml_new_graph(ctx);
+    struct ggml_tensor * mask = create_mask(ctx, input_tokens); // [N, T, 1]
 
     // 1. Embedding: [T, N] → [T, N, D]
     struct ggml_tensor *emb_table = model->tensors["embedding.weight"]; // [V, D]
@@ -110,20 +111,20 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
 
         struct ggml_tensor *rms = ggml_rms_norm(ctx, x, 1e-5f);
         struct ggml_tensor *weight = model->tensors[std::string(prefix) + ".norm1.weight"];
-        weight = ggml_repeat(ctx, weight, rms);  // match [T, N, D]
-        x = ggml_mul(ctx, rms, weight);
+        struct ggml_tensor *bias = model->tensors[std::string(prefix) + ".norm1.bias"];
+        weight = ggml_repeat(ctx, weight, rms);
+        bias = ggml_repeat(ctx, bias, rms);
+        x = ggml_add(ctx, ggml_mul(ctx, rms, weight), bias);
 
         struct ggml_tensor *q = ggml_add(ctx, ggml_mul_mat(ctx, Wq, x), Bq); 
         struct ggml_tensor *k = ggml_add(ctx, ggml_mul_mat(ctx, Wk, x), Bk); 
         struct ggml_tensor *v = ggml_add(ctx, ggml_mul_mat(ctx, Wv, x), Bv); 
 
-        struct ggml_tensor * mask = create_mask(ctx, x); // [N, T, 1]
-
         struct ggml_tensor *attn_out = ggml_flash_attn_ext(
             ctx, q, k, v,
             mask,
             1.0f / sqrtf((float)(hp->d_model / hp->heads)),  // scale
-            -1e4f,  // max_bias
+            -1e9f,  // max_bias
             1.0f   // logit_softcap
         );
 
@@ -139,8 +140,10 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
 
         rms = ggml_rms_norm(ctx, x, 1e-5f);
         weight = model->tensors[std::string(prefix) + ".norm2.weight"];
+        bias = model->tensors[std::string(prefix) + ".norm2.bias"];
         weight = ggml_repeat(ctx, weight, rms);  // match [T, N, D]
-        x = ggml_mul(ctx, rms, weight);
+        bias = ggml_repeat(ctx, bias, rms);  // match [T, N, D]
+        x = ggml_add(ctx, ggml_mul(ctx, rms, weight), bias);
 
         struct ggml_tensor *ff = ggml_add(ctx, ggml_mul_mat(ctx, W1, x), B1);
         ff = ggml_relu(ctx, ff);
