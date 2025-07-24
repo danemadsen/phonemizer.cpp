@@ -8,7 +8,7 @@
 
 class SequenceTokenizer {
     private:
-        const std::string pad_token = "<pad>";
+        const std::string pad_token = " ";
         const int pad_index= 0;
         const std::string end_token = "<end>";
         int end_index;
