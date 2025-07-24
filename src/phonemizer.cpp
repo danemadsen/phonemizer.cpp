@@ -123,7 +123,7 @@ struct ggml_cgraph *create_graph(struct phonemizer_model * model, struct ggml_te
             ctx, q, k, v,
             mask,
             1.0f / sqrtf((float)(hp->d_model / hp->heads)),  // scale
-            0.1f,  // max_bias
+            -1e4f,  // max_bias
             1.0f   // logit_softcap
         );
 
